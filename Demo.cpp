@@ -1,6 +1,15 @@
-#include <linux/perf_event.h>
-#include <linux/hw_breakpoint.h>
-#include <sys/resource.h>
+//Jackson Huff's LinuxCon 2022 performance counter demo program (that you can learn from!)
+
+/*The ISC License
+
+Copyright 2022 by Jackson Huff
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.*/
+
+#include <linux/perf_event.h> //defines performance counter events
+#include <linux/hw_breakpoint.h> //defines several necessary macros
+#include <sys/resource.h> //defines the rlimit struct and getrlimit
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 
@@ -15,7 +24,7 @@
 
 namespace fs = std::filesystem;
 
-struct read_format {
+struct read_format { //read_format is declared in a performance counter header. However, it is never defined, so we have to define it ourselves
 	unsigned long long nr = 0; //how many events there are
 	struct {
 		unsigned long long value; //the value of event nr
@@ -23,10 +32,10 @@ struct read_format {
 	} values[];
 };
 
-struct pcounter {
+struct pcounter { //our Modern C++ abstraction for a generic performance counter group for a PID
 	long pid;
 
-	std::array<std::array<struct perf_event_attr, 1>, 2> perfstruct;
+	std::array<std::array<struct perf_event_attr, 1>, 2> perfstruct; //organize the events per PID like [x, y] such that x is the group, and y is the event within that group
 	std::array<std::array<unsigned long long, 1>, 2> gid; //the id stores the event type in a numerical fashion
 	std::array<std::array<unsigned long long, 1>, 2> gv; //the values of the events
 	std::array<std::array<int, 1>, 2> gfd; //the file descriptors for the counters
@@ -40,10 +49,10 @@ std::vector<long> getProcessChildPids(long pid) {
 	std::regex re("/proc/\\d+/task/", std::regex_constants::optimize);
 	try {
 		for (const auto& dir : fs::directory_iterator{"/proc/" + std::to_string(pid) + "/task"}) {
-			pids.emplace_back(stol(std::regex_replace(dir.path().string(), re, "")));
+			pids.emplace_back(stol(std::regex_replace(dir.path().string(), re, ""))); //the full value of dir.path().string() looks like /proc/the_PID/task/some_number. Remove /proc/the_PID/task/ to yield just the number of the child PID, then add it to our list of the found child(ren)
 		}
 	} catch(...) {
-		std::cout << "Could not add PID to list" << std::endl;
+		std::cout << "Could not add PID to list" << std::endl; //we need better error handling here, but this works fine for a demo
 	}
 	return pids;
 }
@@ -56,20 +65,20 @@ void setupCounter(auto& s) {
 			}
 		}
 	};
-	initArrays(s->gid);
+	initArrays(s->gid); //C++ std::arrays are initialized with unknown values by default. If some events go unusued, nonzero data fools our code into thinking it's a live event, so we must initialize all arrays to 0
 	initArrays(s->gv);
 	initArrays(s->gfd);
-	auto configureStruct = [&](auto& st, const auto perftype, const auto config) {
+	auto configureStruct = [&](auto& st, const auto perftype, const auto config) { //these are common settings for each event. Chaning a setting here will apply everywhere
 		memset(&(st), 0, sizeof(struct perf_event_attr)); //fill the struct with 0s
 		st.type = perftype; //the type of event
 		st.size = sizeof(struct perf_event_attr);
 		st.config = config; //the event we want to measure
-		st.disabled = true;
+		st.disabled = true; //start disabled by default to not count, and skip extra syscalls to disable upon creation
 		st.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID; //format the result in our all-in-one data struct
 	};
 	auto setupEvent = [&](auto& fd, auto& id, auto& st, auto gfd) {
 		fd = syscall(__NR_perf_event_open, &(st), s->pid, -1, gfd, 0);
-		//std::cout << "fd = " << to_string(fd) << std::endl;
+		//std::cout << "fd = " << fd << std::endl;
 		if (fd > 0) {
 			ioctl(fd, PERF_EVENT_IOC_ID, &(id));
 		} else if (fd == -1) {
@@ -113,10 +122,10 @@ void setupCounter(auto& s) {
 					std::cout << "Unsupported event exclusion setting" << std::endl;
 					return;
 				case ESRCH:
-					std::cout << "Invalid PID for event; PID = " + std::to_string(s->pid) << std::endl;
+					std::cout << "Invalid PID for event; PID = " << s->pid << std::endl;
 					return;
 				default:
-					std::cout << "Other performance counter error; errno = " + std::to_string(errno) << std::endl;
+					std::cout << "Other performance counter error; errno = " << errno << std::endl;
 					return;
 			}
 		}
@@ -124,7 +133,7 @@ void setupCounter(auto& s) {
 	//std::cout << "setting up counters for pid " << s->pid << std::endl;
 	errno = 0;
 	configureStruct(s->perfstruct[0][0], PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
-    //PERF_COUNT_HW_CPU_CYCLES works on Intel and AMD but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES only works on Intel but is more accurate
+    	//PERF_COUNT_HW_CPU_CYCLES works on Intel and AMD (and wherever else this event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES only works on Intel (unsure? needs more testing) but is more accurate
 	setupEvent(s->gfd[0][0], s->gid[0][0], s->perfstruct[0][0], -1); //put -1 for the group leader fd because we want to create a group leader
 	configureStruct(s->perfstruct[0][1], PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS);
 	setupEvent(s->gfd[0][1], s->gid[0][1], s->perfstruct[0][1], s->gfd[0][0]);
@@ -147,7 +156,7 @@ void cullCounters(std::vector<struct pcounter*>& counters, const std::vector<lon
 					for (const auto filedescriptor : group) {
 						if (filedescriptor > 2) { //check that we are not closing a built-in file descriptor for stdout, stdin, or stderr
 							//std::cout << "closing fd " << filedescriptor << std::endl;
-							close(filedescriptor);
+							close(filedescriptor); //events, and performance counters as a whole, are nothing but file descriptors, so we can simply close them to get rid of counters
 						}
 					}
 				}
@@ -178,9 +187,9 @@ void disableCounters(const auto& counters) {
 void readCounters(auto& counters) {
 	long size;
 	for (auto& s : counters) {
-		if (s->gfd[0][0] > 2) {
+		if (s->gfd[0][0] > 2) { //checks if this fd is "good." If we do not check and it's an unusued file descriptor, then Linux will deallocate memory for cin instead which leads to segmentation faults (borrow checkers can't prevent this because it happens in the kernel)
 			size = read(s->gfd[0][0], s->buf, sizeof(s->buf)); //get information from the counters
-			if (size >= 40) {
+			if (size >= 40) { //check if there is sufficient data to read from. If not, then reading could give us false counter values
 				for (int i = 0; i < s->data->nr; i++) { //read data from all the events in the struct pointed to by data
 					if (s->data->values[i].id == s->gid[0][0]) { //data->values[i].id points to an event id, and we want to match this id to the one belonging to event 1
 						s->gv[0][0] = s->data->values[i].value; //store the counter value in g1v1
@@ -190,7 +199,7 @@ void readCounters(auto& counters) {
 				}
 			}
 		}
-    }
+    	}
 }
 
 int main() {
@@ -207,41 +216,48 @@ int main() {
 		} 
 	}
 	
+	//set up our data variables that both the backend and the frontend will use
+	//in real programs, these are the only interface between the frontend and the backend, and so these should be atomic (but they don't have to be here)
 	long pid;
-    long long cycles;
-    long long instructions;
+    	long long cycles;
+    	long long instructions;
 
+	//our counter and PID data
 	std::vector<struct pcounter*> MyCounters = {};
-    std::vector<long> newPids = {};
+    	std::vector<long> newPids = {};
 	std::vector<long> diffPids = {};
 	std::vector<long> currentPids;
 
-    std::string input;
+	//get a PID to track from the user
+    	std::string input;
 	std::cout << "Enter a PID " << std::flush;
 	std::cin >> input;
 	try {
 		pid = stol(input);
-	} catch(...) {
+	} catch(...) { //PID must be a number
 		std::cout << "Invalid PID" << std::endl;
 		return 1;
 	}
     
-    currentPids = getProcessChildPids(pid);
-    createCounters(MyCounters, currentPids);
+	//the next step is to make counters for all the known children of our newly obtained PID
+	//find all the children, then make counters for them
+   	currentPids = getProcessChildPids(pid);
+    	createCounters(MyCounters, currentPids);
 
-    while (true) {
-        resetAndEnableCounters(MyCounters);
-        std::this_thread::sleep_for(std::chrono::seconds(5)); //cross-platform method of sleeping
-        disableCounters(MyCounters);
+   	 while (true) {
+        	resetAndEnableCounters(MyCounters);
+       		std::this_thread::sleep_for(std::chrono::seconds(5)); //cross-platform method of sleeping, though it doesn't matter if you are only targeting Linux
+      		disableCounters(MyCounters);
 		readCounters(MyCounters);
-        cycles = 0;
-        instructions = 0;
-        for (const auto& s : MyCounters) {
-            cycles += s->gv[0][0];
-            instructions += s->gv[0][1];
-        }
+        	cycles = 0;
+        	instructions = 0;
+        	for (const auto& s : MyCounters) {
+        	    cycles += s->gv[0][0];
+       		    instructions += s->gv[0][1];
+        	}
 
-        newPids = getProcessChildPids(pid);
+		//calculate the PID delta
+        	newPids = getProcessChildPids(pid);
 		diffPids.clear();
 		std::set_difference(newPids.begin(), newPids.end(), currentPids.begin(), currentPids.end(), std::inserter(diffPids, diffPids.begin())); //calculate what's in newPids that isn't in oldPids
 		createCounters(MyCounters, diffPids);
@@ -250,9 +266,12 @@ int main() {
 		cullCounters(MyCounters, diffPids);
 		currentPids = newPids;
 		
-        std::cout << "----------------------------------------------------" << std::endl;
-        std::cout << "Got " << cycles / 5 << " (" << (float)(cycles / 5) / 1000000000 << " billion) cycles per second" << std::endl;
-        std::cout << "Got " << instructions / 5 << " (" << (float)(instructions / 5) / 1000000000 << " billion) instructions per second" << std::endl;
-        std::cout << "IPC: " << (float)instructions / (float)cycles << std::endl;
-    }
+		//the frontend
+		//in real programs, this section should be in the calling thread
+		//we only access our frontend variables here, as everything having to do with counters is abstracted away elsewhere
+        	std::cout << "----------------------------------------------------" << std::endl;
+        	std::cout << "Got " << cycles / 5 << " (" << (float)(cycles / 5) / 1000000000 << " billion) cycles per second" << std::endl; //divide our data variables by the sleep time to get per-second measurements (you could make this a constexpr variable or a macro)
+        	std::cout << "Got " << instructions / 5 << " (" << (float)(instructions / 5) / 1000000000 << " billion) instructions per second" << std::endl;
+        	std::cout << "IPC: " << (float)instructions / (float)cycles << std::endl; //footgun: never forget to convert to float (or double) when dividing to get a result with decimals
+    	}
 }
