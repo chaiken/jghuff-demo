@@ -257,7 +257,7 @@ void readCounters(auto &counters) {
                   sizeof(s->buf)); // get information from the counters
       if (size >= 40) { // check if there is sufficient data to read from. If
                         // not, then reading could give us false counter values
-        for (int i = 0; i < s->data->nr;
+        for (int i = 0; i < static_cast<int>(s->data->nr);
              i++) { // read data from all the events in the struct pointed to by
                     // data
           if (s->data->values[i].id ==
