@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.*/
 #include <sys/ioctl.h>
 #include <sys/resource.h> //defines the rlimit struct and getrlimit
 #include <sys/syscall.h>
+#include <unistd.h>
 
 #include <array>
 #include <chrono>
@@ -113,7 +114,7 @@ void setupCounter(auto &s) {
             PERF_FORMAT_ID; // format the result in our all-in-one data struct
       };
   auto setupEvent = [&](auto &fd, auto &id, auto &st, auto gfd) {
-    fd = syscall(__NR_perf_event_open, &(st), s->pid, -1, gfd, 0);
+    fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, gfd, 0);
     // std::cout << "fd = " << fd << std::endl;
     if (fd > 0) {
       ioctl(fd, PERF_EVENT_IOC_ID, &(id));
