@@ -1,0 +1,15 @@
+The code in this repo is based on Jackson G. Huff's Embedded Linux Conference 2022 presentation
+
+    https://events.linuxfoundation.org/open-source-summit-north-america/program/schedule/
+
+with slides at
+
+     https://static.sched.com/hosted_files/ossna2022/41/PerfCountSlides.odp
+
+The code was imported from Huff's gist in the following fashion:
+
+$ git clone https://gist.github.com/Slackadays/211ea049dfc14fd7cd2bf0c7e2acf1f0
+$ mv 211ea049dfc14fd7cd2bf0c7e2acf1f0/ jghuff-demo
+$ cd jghuff-demo
+$ git remote add -t main origin git@github.com:chaiken/jghuff-demo
+$ git push  --set-upstream origin main
