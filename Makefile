@@ -10,14 +10,16 @@ CLANG_TIDY_CHECKS=bugprone,core,cplusplus,cppcoreguidelines,deadcode,modernize,p
 clean:
 	rm -rf *.o *~ Demo
 
-Demo: Demo.cpp
+performance_counter_lib: performance_counter_lib.cpp performance_counter_lib.hpp
+
+Demo: Demo.cpp performance_counter_lib.cpp
 	make clean
-	$(CXX) $(CXXFLAGS)  Demo.cpp $(LDFLAGS) -o Demo
+	$(CXX) $(CXXFLAGS)  performance_counter_lib.cpp Demo.cpp $(LDFLAGS) -o Demo
 
 test: Demo
 	sudo setcap "cap_perfmon+ep" Demo
 
 # clang-tidy as of 14.0.6 does not support C++20 well.
-Demo-clang-tidy: Demo.cpp
+Demo-clang-tidy: Demo.cpp performance_counter_lib
 	make clean
-	$(CLANG_TIDY_BINARY) $(CLANG_TIDY_OPTIONS) -checks=$(CLANG_TIDY_CHECKS) Demo.cpp -- $(CLANG_TIDY_CLANG_OPTIONS)
+	$(CLANG_TIDY_BINARY) $(CLANG_TIDY_OPTIONS) -checks=$(CLANG_TIDY_CHECKS)  performance_counter_lib.cpp Demo.cpp -- $(CLANG_TIDY_CLANG_OPTIONS)
