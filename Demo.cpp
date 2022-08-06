@@ -84,7 +84,7 @@ std::vector<long> getProcessChildPids(long pid) {
   return pids;
 }
 
-void setupCounter(auto &s) {
+void setupCounter(struct pcounter* s) {
   auto initArrays = [](auto &arr) {
     for (auto &outergroup : arr) {
       for (auto &innerelement : outergroup) {
@@ -226,7 +226,7 @@ void cullCounters(std::vector<struct pcounter *> &counters,
   }
 }
 
-void resetAndEnableCounters(const auto &counters) {
+void resetAndEnableCounters(const std::vector<struct pcounter *>  &counters) {
   for (const auto &s : counters) {
     for (const auto &group : s->gfd) {
       ioctl(group[0], PERF_EVENT_IOC_RESET,
@@ -237,7 +237,7 @@ void resetAndEnableCounters(const auto &counters) {
   }
 }
 
-void disableCounters(const auto &counters) {
+void disableCounters(const std::vector<struct pcounter *>  &counters) {
   for (const auto &s : counters) {
     for (const auto &group : s->gfd) {
       ioctl(group[0], PERF_EVENT_IOC_DISABLE,
@@ -246,7 +246,7 @@ void disableCounters(const auto &counters) {
   }
 }
 
-void readCounters(auto &counters) {
+void readCounters(std::vector<struct pcounter *> &counters) {
   long size;
   for (auto &s : counters) {
     if (s->gfd[0][0] >
