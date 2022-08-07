@@ -22,21 +22,12 @@ OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.*/
 int main() {
   setLimits();
 
-  // set up our data variables that both the backend and the frontend will use
-  // in real programs, these are the only interface between the frontend and the
-  // backend, and so these should be atomic (but they don't have to be here)
-  pid_t pid;
-  long long cycles;
-  long long instructions;
-
   // our counter and PID data
   std::vector<struct pcounter *> MyCounters = {};
-  std::vector<pid_t> newPids = {};
-  std::vector<pid_t> diffPids = {};
-  std::vector<pid_t> currentPids;
 
   // get a PID to track from the user
   std::string input;
+  pid_t pid;
   std::cout << "Enter a PID " << std::flush;
   std::cin >> input;
   try {
@@ -48,7 +39,7 @@ int main() {
 
   // the next step is to make counters for all the known children of our newly
   // obtained PID find all the children, then make counters for them
-  currentPids = getProcessChildPids(pid);
+  std::vector<pid_t> currentPids = getProcessChildPids(pid);
   createCounters(MyCounters, currentPids);
 
   while (true) {
@@ -58,30 +49,13 @@ int main() {
              // you are only targeting Linux
     disableCounters(MyCounters);
     readCounters(MyCounters);
-    cycles = 0;
-    instructions = 0;
+    long long cycles = 0;
+    long long instructions = 0;
     for (const auto &s : MyCounters) {
       cycles += s->gv[0][0];
       instructions += s->gv[0][1];
     }
-
-    // calculate the PID delta
-    newPids = getProcessChildPids(pid);
-    diffPids.clear();
-    std::set_difference(
-        newPids.begin(), newPids.end(), currentPids.begin(), currentPids.end(),
-        std::inserter(diffPids,
-                      diffPids.begin())); // calculate what's in newPids that
-                                          // isn't in oldPids
-    createCounters(MyCounters, diffPids);
-    diffPids.clear();
-    std::set_difference(
-        currentPids.begin(), currentPids.end(), newPids.begin(), newPids.end(),
-        std::inserter(diffPids,
-                      diffPids.begin())); // calculate what's in oldPids that
-                                          // isn't in newPids
-    cullCounters(MyCounters, diffPids);
-    currentPids = newPids;
     printResults(cycles, instructions);
+    getPidDelta(pid, MyCounters, currentPids);
   }
 }

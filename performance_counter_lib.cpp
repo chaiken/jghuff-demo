@@ -235,6 +235,28 @@ void readCounters(std::vector<struct pcounter *> &counters) {
   }
 }
 
+void getPidDelta(const pid_t pid, std::vector<struct pcounter *> &MyCounters,
+                 std::vector<pid_t> &currentPids) {
+  std::vector<pid_t> diffPids{};
+
+  // calculate the PID delta
+  std::vector<pid_t> newPids = getProcessChildPids(pid);
+  std::set_difference(
+      newPids.begin(), newPids.end(), currentPids.begin(), currentPids.end(),
+      std::inserter(diffPids,
+                    diffPids.begin())); // calculate what's in newPids that
+                                        // isn't in oldPids
+  createCounters(MyCounters, diffPids);
+  diffPids.clear();
+  std::set_difference(
+      currentPids.begin(), currentPids.end(), newPids.begin(), newPids.end(),
+      std::inserter(diffPids,
+                    diffPids.begin())); // calculate what's in oldPids that
+                                        // isn't in newPids
+  cullCounters(MyCounters, diffPids);
+  currentPids = std::move(newPids);
+}
+
 // the frontend
 // in real programs, this section should be in the calling thread
 // we only access our frontend variables here, as everything having to do

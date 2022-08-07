@@ -65,3 +65,6 @@ void cullCounters(std::vector<struct pcounter *> &counters,
                   const std::vector<pid_t> &pids);
 
 void printResults(const long long cycles, const long long instructions);
+
+void getPidDelta(const pid_t pid, std::vector<struct pcounter *> &MyCounters,
+                 std::vector<pid_t> &currentPids);
