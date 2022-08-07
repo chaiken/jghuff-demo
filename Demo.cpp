@@ -17,29 +17,10 @@ OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.*/
 
 #include "performance_counter_lib.hpp"
 
-#include <sys/resource.h> //defines the rlimit struct and getrlimit
 #include <thread>
 
 int main() {
-  // start by cranking up resource limits so we can track programs with many
-  // threads
-  if (getuid()) { // the root user commonly has different and lower resource
-                  // limit hard ceilings than nonroot users, so skip this if we
-                  // are root
-    struct rlimit rlimits;
-    // std::cout << "Setting resource limits" << std::endl;
-    if (getrlimit(RLIMIT_NOFILE, &rlimits) == -1) {
-      std::cout << "Error getting resource limits; errno = " << errno
-                << std::endl;
-    }
-    rlimits.rlim_cur =
-        rlimits.rlim_max; // resize soft limit to max limit; the max limit is a
-                          // ceiling for the soft limit
-    if (setrlimit(RLIMIT_NOFILE, &rlimits) == -1) {
-      std::cout << "Error changing resource limits; errno = " << errno
-                << std::endl;
-    }
-  }
+  setLimits();
 
   // set up our data variables that both the backend and the frontend will use
   // in real programs, these are the only interface between the frontend and the
@@ -101,25 +82,6 @@ int main() {
                                           // isn't in newPids
     cullCounters(MyCounters, diffPids);
     currentPids = newPids;
-
-    // the frontend
-    // in real programs, this section should be in the calling thread
-    // we only access our frontend variables here, as everything having to do
-    // with counters is abstracted away elsewhere
-    std::cout << "----------------------------------------------------"
-              << std::endl;
-    std::cout << "Got " << cycles / 5 << " ("
-              << (float)(cycles / 5) / 1000000000
-              << " billion) cycles per second"
-              << std::endl; // divide our data variables by the sleep time to
-                            // get per-second measurements (you could make this
-                            // a constexpr variable or a macro)
-    std::cout << "Got " << instructions / 5 << " ("
-              << (float)(instructions / 5) / 1000000000
-              << " billion) instructions per second" << std::endl;
-    std::cout
-        << "IPC: " << (float)instructions / (float)cycles
-        << std::endl; // footgun: never forget to convert to float (or double)
-                      // when dividing to get a result with decimals
+    printResults(cycles, instructions);
   }
 }

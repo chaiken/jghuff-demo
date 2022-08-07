@@ -1,6 +1,7 @@
 #include <linux/hw_breakpoint.h> //defines several necessary macros
 #include <linux/perf_event.h>    //defines performance counter events
 #include <sys/ioctl.h>
+#include <sys/resource.h> //defines the rlimit struct and getrlimit
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -44,6 +45,8 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
             // conversion explicitly
 };
 
+void setLimits();
+
 std::vector<pid_t> getProcessChildPids(pid_t pid);
 void createCounters(std::vector<struct pcounter *> &counters,
                     const std::vector<pid_t> &pids);
@@ -60,3 +63,5 @@ void createCounters(std::vector<struct pcounter *> &counters,
 
 void cullCounters(std::vector<struct pcounter *> &counters,
                   const std::vector<pid_t> &pids);
+
+void printResults(const long long cycles, const long long instructions);
