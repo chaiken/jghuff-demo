@@ -26,7 +26,7 @@ struct read_format { // read_format is declared in a performance counter header.
 
 struct pcounter { // our Modern C++ abstraction for a generic performance
                   // counter group for a PID
-  long pid;
+  pid_t pid;
 
   std::array<std::array<struct perf_event_attr, 1>, 2>
       perfstruct; // organize the events per PID like [x, y] such that x is the
@@ -44,19 +44,19 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
             // conversion explicitly
 };
 
-std::vector<long> getProcessChildPids(long pid);
+std::vector<pid_t> getProcessChildPids(pid_t pid);
 void createCounters(std::vector<struct pcounter *> &counters,
-                    const std::vector<long> &pids);
+                    const std::vector<pid_t> &pids);
 void resetAndEnableCounters(const std::vector<struct pcounter *> &counters);
 
 void disableCounters(const std::vector<struct pcounter *> &counters);
 
 void readCounters(std::vector<struct pcounter *> &counters);
 
-std::vector<long> getProcessChildPids(long pid);
+std::vector<pid_t> getProcessChildPids(pid_t pid);
 
 void createCounters(std::vector<struct pcounter *> &counters,
-                    const std::vector<long> &pids);
+                    const std::vector<pid_t> &pids);
 
 void cullCounters(std::vector<struct pcounter *> &counters,
-                  const std::vector<long> &pids);
+                  const std::vector<pid_t> &pids);

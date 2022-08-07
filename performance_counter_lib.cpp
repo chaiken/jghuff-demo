@@ -1,7 +1,7 @@
 #include "performance_counter_lib.hpp"
 
-std::vector<long> getProcessChildPids(long pid) {
-  std::vector<long> pids;
+std::vector<pid_t> getProcessChildPids(pid_t pid) {
+  std::vector<pid_t> pids;
   std::regex re("/proc/\\d+/task/", std::regex_constants::optimize);
   try {
     for (const auto &dir :
@@ -126,7 +126,7 @@ void setupCounter(struct pcounter *s) {
 }
 
 void createCounters(std::vector<struct pcounter *> &counters,
-                    const std::vector<long> &pids) {
+                    const std::vector<pid_t> &pids) {
   for (const auto &it : pids) {
     counters.emplace_back(
         new pcounter); // create a new pcounter object; don't use smart pointers
@@ -139,7 +139,7 @@ void createCounters(std::vector<struct pcounter *> &counters,
 }
 
 void cullCounters(std::vector<struct pcounter *> &counters,
-                  const std::vector<long> &pids) {
+                  const std::vector<pid_t> &pids) {
   for (const auto culledpid : pids) {
     for (auto &s : counters) {
       if (s->pid == culledpid) {

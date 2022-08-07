@@ -44,15 +44,15 @@ int main() {
   // set up our data variables that both the backend and the frontend will use
   // in real programs, these are the only interface between the frontend and the
   // backend, and so these should be atomic (but they don't have to be here)
-  long pid;
+  pid_t pid;
   long long cycles;
   long long instructions;
 
   // our counter and PID data
   std::vector<struct pcounter *> MyCounters = {};
-  std::vector<long> newPids = {};
-  std::vector<long> diffPids = {};
-  std::vector<long> currentPids;
+  std::vector<pid_t> newPids = {};
+  std::vector<pid_t> diffPids = {};
+  std::vector<pid_t> currentPids;
 
   // get a PID to track from the user
   std::string input;
