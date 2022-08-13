@@ -44,9 +44,9 @@ int main() {
 
   while (true) {
     resetAndEnableCounters(MyCounters);
-    std::this_thread::sleep_for(std::chrono::seconds(
-        5)); // cross-platform method of sleeping, though it doesn't matter if
-             // you are only targeting Linux
+    std::this_thread::sleep_for(
+        SLEEPTIME); // cross-platform method of sleeping, though it doesn't
+                    // matter if you are only targeting Linux
     disableCounters(MyCounters);
     readCounters(MyCounters);
     long long cycles = 0;

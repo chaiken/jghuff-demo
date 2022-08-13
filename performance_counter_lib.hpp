@@ -15,6 +15,9 @@
 
 namespace fs = std::filesystem;
 
+constexpr std::chrono::seconds SLEEPTIME = std::chrono::seconds(5);
+constexpr uint64_t SLEEPCOUNT = std::chrono::seconds(5).count();
+
 struct read_format { // read_format is declared in a performance counter header.
                      // However, it is never defined, so we have to define it
                      // ourselves

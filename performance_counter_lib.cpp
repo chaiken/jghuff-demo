@@ -1,5 +1,10 @@
 #include "performance_counter_lib.hpp"
 
+#include <cstring>
+
+constexpr uint32_t MIN_COUNTER_READSIZE = 40;
+constexpr uint32_t BILLION = 1e9;
+
 // start by cranking up resource limits so we can track programs with many
 // threads
 void setLimits() {
@@ -209,14 +214,16 @@ void readCounters(std::vector<struct pcounter *> &counters) {
   long size;
   for (auto &s : counters) {
     if (s->gfd[0][0] >
-        2) { // checks if this fd is "good." If we do not check and it's an
-             // unusued file descriptor, then Linux will deallocate memory for
-             // cin instead which leads to segmentation faults (borrow checkers
-             // can't prevent this because it happens in the kernel)
+        STDERR_FILENO) { // checks if this fd is "good." If we do not check and
+                         // it's an unusued file descriptor, then Linux will
+                         // deallocate memory for cin instead which leads to
+                         // segmentation faults (borrow checkers can't prevent
+                         // this because it happens in the kernel)
       size = read(s->gfd[0][0], s->buf,
-                  sizeof(s->buf)); // get information from the counters
-      if (size >= 40) { // check if there is sufficient data to read from. If
-                        // not, then reading could give us false counter values
+                  sizeof(s->buf));        // get information from the counters
+      if (size >= MIN_COUNTER_READSIZE) { // check if there is sufficient data
+                                          // to read from. If
+        // not, then reading could give us false counter values
         for (int i = 0; i < static_cast<int>(s->data->nr);
              i++) { // read data from all the events in the struct pointed to by
                     // data
@@ -264,13 +271,14 @@ void getPidDelta(const pid_t pid, std::vector<struct pcounter *> &MyCounters,
 void printResults(const long long cycles, const long long instructions) {
   std::cout << "----------------------------------------------------"
             << std::endl;
-  std::cout << "Got " << cycles / 5 << " (" << (float)(cycles / 5) / 1000000000
+  std::cout << "Got " << cycles / SLEEPCOUNT << " ("
+            << (float)(cycles / SLEEPCOUNT) / BILLION
             << " billion) cycles per second"
             << std::endl; // divide our data variables by the sleep time to
                           // get per-second measurements (you could make this
                           // a constexpr variable or a macro)
-  std::cout << "Got " << instructions / 5 << " ("
-            << (float)(instructions / 5) / 1000000000
+  std::cout << "Got " << instructions / SLEEPCOUNT << " ("
+            << (float)(instructions / SLEEPCOUNT) / BILLION
             << " billion) instructions per second" << std::endl;
   std::cout << "IPC: " << (float)instructions / (float)cycles
             << std::endl; // footgun: never forget to convert to float (or
