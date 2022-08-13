@@ -40,6 +40,9 @@ int main() {
   // the next step is to make counters for all the known children of our newly
   // obtained PID find all the children, then make counters for them
   std::vector<pid_t> currentPids = getProcessChildPids(pid);
+  if (currentPids.empty()) {
+    exit(EXIT_SUCCESS);
+  }
   createCounters(MyCounters, currentPids);
 
   while (true) {

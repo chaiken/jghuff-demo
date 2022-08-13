@@ -28,22 +28,23 @@ void setLimits() {
 }
 
 std::vector<pid_t> getProcessChildPids(pid_t pid) {
-  std::vector<pid_t> pids;
-  std::regex re("/proc/\\d+/task/", std::regex_constants::optimize);
-  try {
-    for (const auto &dir :
-         fs::directory_iterator{"/proc/" + std::to_string(pid) + "/task"}) {
-      pids.emplace_back(stol(std::regex_replace(
-          dir.path().string(), re,
-          ""))); // the full value of dir.path().string() looks like
-                 // /proc/the_PID/task/some_number. Remove /proc/the_PID/task/
-                 // to yield just the number of the child PID, then add it to
-                 // our list of the found child(ren)
-    }
-  } catch (...) {
-    std::cout << "Could not add PID to list"
+  std::vector<pid_t> pids{};
+  const fs::path task_path{"/proc/" + std::to_string(pid) + "/task"};
+  if (!fs::exists(task_path)) {
+    std::cout << "No such PID " << pid
               << std::endl; // we need better error handling here, but this
                             // works fine for a demo
+    return pids;
+  }
+  std::regex re("/proc/\\d+/task/", std::regex_constants::optimize);
+  for (const auto &dir :
+       fs::directory_iterator{"/proc/" + std::to_string(pid) + "/task"}) {
+    pids.emplace_back(stol(std::regex_replace(
+        dir.path().string(), re,
+        ""))); // the full value of dir.path().string() looks like
+               // /proc/the_PID/task/some_number. Remove /proc/the_PID/task/
+               // to yield just the number of the child PID, then add it to
+               // our list of the found child(ren)
   }
   return pids;
 }
