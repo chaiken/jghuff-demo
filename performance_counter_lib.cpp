@@ -63,8 +63,8 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
 }
 
 void setupEvent(struct pcounter *s, int &fd, long long unsigned int &id,
-                perf_event_attr &st, int gfd) {
-  fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, gfd, 0);
+                perf_event_attr &st, int counter_fd) {
+  fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, counter_fd, 0);
   // std::cout << "fd = " << fd << std::endl;
   if (fd > STDERR_FILENO) {
     ioctl(fd, PERF_EVENT_IOC_ID, &(id));
@@ -90,17 +90,6 @@ void configureStruct(struct perf_event_attr &st, const perf_type_id perftype,
 }
 
 void setupCounter(struct pcounter *s) {
-  auto initArrays = [](auto &arr) {
-    for (auto &x : arr) {
-      x = 0;
-    }
-  };
-  initArrays(s->gid); // C++ std::arrays are initialized with unknown values by
-                      // default. If some events go unusued, nonzero data fools
-                      // our code into thinking it's a live event, so we must
-                      // initialize all arrays to 0
-  initArrays(s->gv);
-  initArrays(s->gfd);
   // std::cout << "setting up counters for pid " << s->pid << std::endl;
   errno = 0;
   configureStruct(s->perfstruct[0], PERF_TYPE_HARDWARE,
@@ -109,10 +98,11 @@ void setupCounter(struct pcounter *s) {
   // event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES
   // only works on Intel (unsure? needs more testing) but is more accurate
   // put -1 for the group leader fd because we want to create a  group leader
-  setupEvent(s, s->gfd[0], s->gid[0], s->perfstruct[0], -1);
+  setupEvent(s, s->counter_fd[0], s->event_id[0], s->perfstruct[0], -1);
   configureStruct(s->perfstruct[1], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_INSTRUCTIONS);
-  setupEvent(s, s->gfd[1], s->gid[1], s->perfstruct[1], s->gfd[0]);
+  setupEvent(s, s->counter_fd[1], s->event_id[1], s->perfstruct[1],
+             s->counter_fd[0]);
 }
 
 void createCounters(std::vector<struct pcounter *> &counters,
@@ -132,7 +122,7 @@ void cullCounters(std::vector<struct pcounter *> &counters,
   for (const auto culledpid : pids) {
     for (auto &s : counters) {
       if (s->pid == culledpid) {
-        for (const auto filedescriptor : s->gfd) {
+        for (const auto filedescriptor : s->counter_fd) {
           if (filedescriptor > STDERR_FILENO) {
             // std::cout << "closing fd " << filedescriptor << std::endl;
             close(filedescriptor); // events, and performance counters as a
@@ -150,7 +140,7 @@ void cullCounters(std::vector<struct pcounter *> &counters,
 
 void resetAndEnableCounters(const std::vector<struct pcounter *> &counters) {
   for (const auto &s : counters) {
-    for (const auto &group : s->gfd) {
+    for (const auto &group : s->counter_fd) {
       ioctl(group, PERF_EVENT_IOC_RESET,
             PERF_IOC_FLAG_GROUP); // reset the counters for ALL the events that
                                   // are members of the group
@@ -161,7 +151,7 @@ void resetAndEnableCounters(const std::vector<struct pcounter *> &counters) {
 
 void disableCounters(const std::vector<struct pcounter *> &counters) {
   for (const auto &s : counters) {
-    for (const auto &group : s->gfd) {
+    for (const auto &group : s->counter_fd) {
       ioctl(group, PERF_EVENT_IOC_DISABLE,
             PERF_IOC_FLAG_GROUP); // disable all counters in the groups
     }
@@ -171,14 +161,14 @@ void disableCounters(const std::vector<struct pcounter *> &counters) {
 void readCounters(std::vector<struct pcounter *> &counters) {
   long size;
   for (auto &s : counters) {
-    if (s->gfd[0] >
+    if (s->counter_fd[0] >
         STDERR_FILENO) { // checks if this fd is "good." If we do not check and
                          // it's an unusued file descriptor, then Linux will
                          // deallocate memory for cin instead which leads to
                          // segmentation faults (borrow checkers can't prevent
                          // this because it happens in the kernel)
       size =
-          read(s->gfd[0], s->event_data.buf,
+          read(s->counter_fd[0], s->event_data.buf,
                sizeof(s->event_data.buf)); // get information from the counters
       if (size >= MIN_COUNTER_READSIZE) {  // check if there is sufficient data
                                            // to read from. If
@@ -187,13 +177,14 @@ void readCounters(std::vector<struct pcounter *> &counters) {
              i++) { // read data from all the events in the struct pointed to by
                     // data
           if (s->event_data.per_event_values.values[i].id ==
-              s->gid[0]) { // data.values[i].id points to an event id, and
-                           // we want to match this id to the one belonging
-                           // to event 1
-            s->gv[0] = s->event_data.per_event_values.values[i]
-                           .value; // store the counter value in g1v1
-          } else if (s->event_data.per_event_values.values[i].id == s->gid[1]) {
-            s->gv[1] = s->event_data.per_event_values.values[i].value;
+              s->event_id[0]) { // data.values[i].id points to an event id, and
+                                // we want to match this id to the one belonging
+                                // to event 1
+            s->event_value[0] = s->event_data.per_event_values.values[i]
+                                    .value; // store the counter value in g1v1
+          } else if (s->event_data.per_event_values.values[i].id ==
+                     s->event_id[1]) {
+            s->event_value[1] = s->event_data.per_event_values.values[i].value;
           }
         }
       }
