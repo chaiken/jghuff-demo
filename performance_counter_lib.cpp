@@ -5,46 +5,25 @@
 constexpr uint32_t MIN_COUNTER_READSIZE = 40;
 constexpr uint32_t BILLION = 1e9;
 
-// start by cranking up resource limits so we can track programs with many
-// threads
-void setLimits() {
-  if (getuid()) { // the root user commonly has different and lower resource
-                  // limit hard ceilings than nonroot users, so skip this if we
-                  // are root
-    struct rlimit rlimits;
-    // std::cout << "Setting resource limits" << std::endl;
-    if (getrlimit(RLIMIT_NOFILE, &rlimits) == -1) {
-      std::cout << "Error getting resource limits; errno = " << errno
-                << std::endl;
-    }
-    rlimits.rlim_cur =
-        rlimits.rlim_max; // resize soft limit to max limit; the max limit is a
-                          // ceiling for the soft limit
-    if (setrlimit(RLIMIT_NOFILE, &rlimits) == -1) {
-      std::cout << "Error changing resource limits; errno = " << errno
-                << std::endl;
-    }
-  }
-}
-
-std::vector<pid_t> getProcessChildPids(pid_t pid) {
+std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
+                                       pid_t pid) {
   std::vector<pid_t> pids{};
-  const fs::path task_path{"/proc/" + std::to_string(pid) + "/task"};
+  const fs::path task_path{proc_path + std::to_string(pid) + "/task"};
   if (!fs::exists(task_path)) {
     std::cout << "No such PID " << pid
               << std::endl; // we need better error handling here, but this
                             // works fine for a demo
-    return pids;
-  }
-  std::regex re("/proc/\\d+/task/", std::regex_constants::optimize);
-  for (const auto &dir :
-       fs::directory_iterator{"/proc/" + std::to_string(pid) + "/task"}) {
-    pids.emplace_back(stol(std::regex_replace(
-        dir.path().string(), re,
-        ""))); // the full value of dir.path().string() looks like
-               // /proc/the_PID/task/some_number. Remove /proc/the_PID/task/
-               // to yield just the number of the child PID, then add it to
-               // our list of the found child(ren)
+  } else {
+    std::regex re(proc_path + "\\d+/task/", std::regex_constants::optimize);
+    for (const auto &dir :
+         fs::directory_iterator{proc_path + std::to_string(pid) + "/task"}) {
+      pids.emplace_back(std::stol(std::regex_replace(
+          dir.path().string(), re,
+          ""))); // the full value of dir.path().string() looks like
+                 // /proc/the_PID/task/some_number. Remove /proc/the_PID/task/
+                 // to yield just the number of the child PID, then add it to
+                 // our list of the found child(ren)
+    }
   }
   return pids;
 }
@@ -244,12 +223,13 @@ void readCounters(std::vector<struct pcounter *> &counters) {
   }
 }
 
-void getPidDelta(const pid_t pid, std::vector<struct pcounter *> &MyCounters,
+void getPidDelta(const std::string &proc_path, const pid_t pid,
+                 std::vector<struct pcounter *> &MyCounters,
                  std::vector<pid_t> &currentPids) {
   std::vector<pid_t> diffPids{};
 
   // calculate the PID delta
-  std::vector<pid_t> newPids = getProcessChildPids(pid);
+  std::vector<pid_t> newPids = getProcessChildPids(proc_path, pid);
   std::set_difference(
       newPids.begin(), newPids.end(), currentPids.begin(), currentPids.end(),
       std::inserter(diffPids,
