@@ -5,6 +5,40 @@
 constexpr uint32_t MIN_COUNTER_READSIZE = 40;
 constexpr uint32_t BILLION = 1e9;
 
+std::string lookupErrorMessage(const int errnum) {
+  switch (errnum) {
+  case E2BIG:
+    return "Event perfstruct is too small";
+  case EACCES:
+    return "Performance counters not permitted or available; try using a "
+           "newer Linux kernel or assigning the CAP_PERFMON capability";
+  case EBADF:
+    return "Event group_fd not valid";
+  case EBUSY:
+    return "Another process has exclusive access to performance counters";
+  case EFAULT:
+    return "Invalid memory address";
+  case EINVAL:
+    return "Invalid event";
+  case EMFILE:
+    return "Not enough file descriptors available";
+  case ENODEV:
+    return "Event not supported on this CPU";
+  case ENOENT:
+    return "Invalid event type";
+  case ENOSPC:
+    return "Too many hardware breakpoint events";
+  case EOPNOTSUPP:
+    return "Hardware support not available";
+  case EPERM:
+    return "Unsupported event exclusion setting";
+  case ESRCH:
+    return "Invalid PID for event";
+  default:
+    return "Other performance counter error; errno = " + std::to_string(errnum);
+  }
+}
+
 std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
                                        pid_t pid) {
   std::vector<pid_t> pids{};
@@ -32,61 +66,10 @@ void setupEvent(struct pcounter *s, int &fd, long long unsigned int &id,
                 perf_event_attr &st, int gfd) {
   fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, gfd, 0);
   // std::cout << "fd = " << fd << std::endl;
-  if (fd > 0) {
+  if (fd > STDERR_FILENO) {
     ioctl(fd, PERF_EVENT_IOC_ID, &(id));
-  } else if (fd == -1) {
-    switch (errno) {
-    case E2BIG:
-      std::cout << "Event perfstruct is too small" << std::endl;
-      return;
-    case EACCES:
-      std::cout
-          << "Performance counters not permitted or available; try using a "
-             "newer Linux kernel or assigning the CAP_PERFMON capability"
-          << std::endl;
-      return;
-    case EBADF:
-      if (gfd > -1) {
-        std::cout << "Event group_fd not valid" << std::endl;
-      }
-      return;
-    case EBUSY:
-      std::cout
-          << "Another process has exclusive access to performance counters"
-          << std::endl;
-      return;
-    case EFAULT:
-      std::cout << "Invalid memory address" << std::endl;
-      return;
-    case EINVAL:
-      std::cout << "Invalid event" << std::endl;
-      return;
-    case EMFILE:
-      std::cout << "Not enough file descriptors available" << std::endl;
-      return;
-    case ENODEV:
-      std::cout << "Event not supported on this CPU" << std::endl;
-      return;
-    case ENOENT:
-      std::cout << "Invalid event type" << std::endl;
-      return;
-    case ENOSPC:
-      std::cout << "Too many hardware breakpoint events" << std::endl;
-      return;
-    case EOPNOTSUPP:
-      std::cout << "Hardware support not available" << std::endl;
-      return;
-    case EPERM:
-      std::cout << "Unsupported event exclusion setting" << std::endl;
-      return;
-    case ESRCH:
-      std::cout << "Invalid PID for event; PID = " << s->pid << std::endl;
-      return;
-    default:
-      std::cout << "Other performance counter error; errno = " << errno
-                << std::endl;
-      return;
-    }
+  } else {
+    std::cout << lookupErrorMessage(errno) << std::endl;
   }
 }
 
