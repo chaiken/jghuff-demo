@@ -73,6 +73,22 @@ void setupEvent(struct pcounter *s, int &fd, long long unsigned int &id,
   }
 }
 
+// these are common settings for each event.
+// Changing a setting here will apply everywhere
+void configureStruct(struct perf_event_attr &st, const perf_type_id perftype,
+                     const perf_hw_id config) {
+  memset(&(st), 0,
+         sizeof(struct perf_event_attr)); // fill the struct with 0s
+  st.type = perftype;                     // the type of event
+  st.size = sizeof(struct perf_event_attr);
+  st.config = config; // the event we want to measure
+  st.disabled = true; // start disabled by default to not count, and skip
+                      // extra syscalls to disable upon creation
+  st.read_format =
+      PERF_FORMAT_GROUP |
+      PERF_FORMAT_ID; // format the result in our all-in-one data struct
+}
+
 void setupCounter(struct pcounter *s) {
   auto initArrays = [](auto &arr) {
     for (auto &outergroup : arr) {
@@ -87,21 +103,6 @@ void setupCounter(struct pcounter *s) {
                       // initialize all arrays to 0
   initArrays(s->gv);
   initArrays(s->gfd);
-  auto configureStruct =
-      [&](auto &st, const auto perftype,
-          const auto config) { // these are common settings for each event.
-                               // Chaning a setting here will apply everywhere
-        memset(&(st), 0,
-               sizeof(struct perf_event_attr)); // fill the struct with 0s
-        st.type = perftype;                     // the type of event
-        st.size = sizeof(struct perf_event_attr);
-        st.config = config; // the event we want to measure
-        st.disabled = true; // start disabled by default to not count, and skip
-                            // extra syscalls to disable upon creation
-        st.read_format =
-            PERF_FORMAT_GROUP |
-            PERF_FORMAT_ID; // format the result in our all-in-one data struct
-      };
   // std::cout << "setting up counters for pid " << s->pid << std::endl;
   errno = 0;
   configureStruct(s->perfstruct[0][0], PERF_TYPE_HARDWARE,
