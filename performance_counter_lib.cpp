@@ -223,6 +223,9 @@ void getPidDelta(const std::string &proc_path, const pid_t pid,
 // we only access our frontend variables here, as everything having to do
 // with counters is abstracted away elsewhere
 void printResults(const long long cycles, const long long instructions) {
+  if (!cycles) {
+    return;
+  }
   std::cout << "----------------------------------------------------"
             << std::endl;
   std::cout << "Got " << cycles / SLEEPCOUNT << " ("
