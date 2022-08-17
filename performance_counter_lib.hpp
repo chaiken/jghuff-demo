@@ -35,15 +35,15 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
 
   pid_t pid;
 
-  std::array<std::array<struct perf_event_attr, 1>, 2>
-      perfstruct; // organize the events per PID like [x, y] such that x is the
-                  // group, and y is the event within that group
-  std::array<std::array<unsigned long long, 1>, 2>
-      gid; // the id stores the event type in a numerical fashion
-  std::array<std::array<unsigned long long, 1>, 2>
-      gv;                                // the values of the events
-  std::array<std::array<int, 1>, 2> gfd; // the file descriptors for the
-                                         // counters
+  // organize the events per PID like [x, y] such that x is the
+  // group, and y is the event within that group
+  std::array<struct perf_event_attr, 2> perfstruct;
+  // the id stores the event type in a numerical fashion
+  std::array<unsigned long long, 2> gid;
+  // the values of the events
+  std::array<unsigned long long, 2> gv;
+  // the file descriptors for the counters
+  std::array<int, 2> gfd;
 
   union {
     // buf size equation: (maximum events counted * 16) + 8
