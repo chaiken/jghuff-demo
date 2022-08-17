@@ -112,10 +112,10 @@ void setupCounter(struct pcounter *s) {
 
 void createCounters(std::vector<struct pcounter *> &counters,
                     const std::vector<pid_t> &pids) {
-  for (const auto &it : pids) {
+  for (const auto &pid : pids) {
     counters.push_back(
-        new pcounter(it)); // create a new pcounter object; don't use smart
-                           // pointers because they dereference to 0
+        new pcounter(pid)); // create a new pcounter object; don't use smart
+                            // pointers because they dereference to 0
     // std::cout << "creating counter for pid " << counters.back()->pid <<
     // std::endl;
     setupCounter(counters.back());
@@ -125,71 +125,69 @@ void createCounters(std::vector<struct pcounter *> &counters,
 void cullCounters(std::vector<struct pcounter *> &counters,
                   const std::vector<pid_t> &pids) {
   for (const auto culledpid : pids) {
-    for (auto &s : counters) {
-      if (s->pid == culledpid) {
-        for (const auto filedescriptor : s->counter_fd) {
+    for (auto &counter : counters) {
+      if (counter->pid == culledpid) {
+        for (const auto filedescriptor : counter->counter_fd) {
           if (filedescriptor > STDERR_FILENO) {
             // std::cout << "closing fd " << filedescriptor << std::endl;
-            close(filedescriptor); // events, and performance counters as a
-                                   // whole, are nothing but file descriptors,
-                                   // so we can simply close them to get rid
-                                   // of counters
+            // events, and performance counters as a  whole, are nothing but
+            // file descriptors,  so we can simply close them to get rid of
+            // counters
+            close(filedescriptor);
           }
         }
         // std::cout << "culling counter for pid " << s->pid << std::endl;
-        counters.erase(std::find(std::begin(counters), std::end(counters), s));
+        counters.erase(
+            std::find(std::begin(counters), std::end(counters), counter));
       }
     }
   }
 }
 
 void resetAndEnableCounters(const std::vector<struct pcounter *> &counters) {
-  for (const auto &s : counters) {
-    for (const auto &group : s->counter_fd) {
-      ioctl(group, PERF_EVENT_IOC_RESET,
-            PERF_IOC_FLAG_GROUP); // reset the counters for ALL the events that
-                                  // are members of the group
+  for (const auto &counter : counters) {
+    for (const auto &group : counter->counter_fd) {
+      // reset the counters for ALL the events that are members of the group
+      ioctl(group, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
+      // enable all the events that are members of the group
       ioctl(group, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
     }
   }
 }
 
 void disableCounters(const std::vector<struct pcounter *> &counters) {
-  for (const auto &s : counters) {
-    for (const auto &group : s->counter_fd) {
-      ioctl(group, PERF_EVENT_IOC_DISABLE,
-            PERF_IOC_FLAG_GROUP); // disable all counters in the groups
+  for (const auto &counter : counters) {
+    for (const auto &group : counter->counter_fd) {
+      // disable all counters in the groups
+      ioctl(group, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
     }
   }
 }
 
 void readCounters(std::vector<struct pcounter *> &counters) {
   long size;
-  for (auto &s : counters) {
-    if (s->counter_fd[0] >
-        STDERR_FILENO) { // checks if this fd is "good." If we do not check and
-                         // it's an unusued file descriptor, then Linux will
-                         // deallocate memory for cin instead which leads to
-                         // segmentation faults (borrow checkers can't prevent
-                         // this because it happens in the kernel)
-      size =
-          read(s->counter_fd[0], s->event_data.buf,
-               sizeof(s->event_data.buf)); // get information from the counters
-      if (size >= MIN_COUNTER_READSIZE) {  // check if there is sufficient data
-                                           // to read from. If
-        // not, then reading could give us false counter values
-        for (int i = 0; i < static_cast<int>(s->event_data.per_event_values.nr);
-             i++) { // read data from all the events in the struct pointed to by
-                    // data
-          if (s->event_data.per_event_values.values[i].id ==
-              s->event_id[0]) { // data.values[i].id points to an event id, and
-                                // we want to match this id to the one belonging
-                                // to event 1
-            s->event_value[0] = s->event_data.per_event_values.values[i]
-                                    .value; // store the counter value in g1v1
-          } else if (s->event_data.per_event_values.values[i].id ==
-                     s->event_id[1]) {
-            s->event_value[1] = s->event_data.per_event_values.values[i].value;
+  for (auto &counter : counters) {
+    // checks if this fd is "good." If  it's an unused file descriptor, then
+    // Linux will deallocate memory for cin instead which leads to segmentation
+    // faults (borrow checkers can't prevent  this because it happens in the
+    // kernel)
+    if (counter->counter_fd[0] > STDERR_FILENO) {
+      size = read(counter->counter_fd[0], counter->event_data.buf,
+                  sizeof(counter->event_data.buf));
+      //  If false, reading could give us false counter values.
+      if (size >= MIN_COUNTER_READSIZE) {
+        for (int i = 0;
+             i < static_cast<int>(counter->event_data.per_event_values.nr);
+             i++) {
+          // we want to match this id to the one belonging to event 1
+          if (counter->event_data.per_event_values.values[i].id ==
+              counter->event_id[0]) {
+            counter->event_value[0] =
+                counter->event_data.per_event_values.values[i].value;
+          } else if (counter->event_data.per_event_values.values[i].id ==
+                     counter->event_id[1]) {
+            counter->event_value[1] =
+                counter->event_data.per_event_values.values[i].value;
           }
         }
       }
