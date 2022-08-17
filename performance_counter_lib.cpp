@@ -28,6 +28,68 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
   return pids;
 }
 
+void setupEvent(struct pcounter *s, int &fd, long long unsigned int &id,
+                perf_event_attr &st, int gfd) {
+  fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, gfd, 0);
+  // std::cout << "fd = " << fd << std::endl;
+  if (fd > 0) {
+    ioctl(fd, PERF_EVENT_IOC_ID, &(id));
+  } else if (fd == -1) {
+    switch (errno) {
+    case E2BIG:
+      std::cout << "Event perfstruct is too small" << std::endl;
+      return;
+    case EACCES:
+      std::cout
+          << "Performance counters not permitted or available; try using a "
+             "newer Linux kernel or assigning the CAP_PERFMON capability"
+          << std::endl;
+      return;
+    case EBADF:
+      if (gfd > -1) {
+        std::cout << "Event group_fd not valid" << std::endl;
+      }
+      return;
+    case EBUSY:
+      std::cout
+          << "Another process has exclusive access to performance counters"
+          << std::endl;
+      return;
+    case EFAULT:
+      std::cout << "Invalid memory address" << std::endl;
+      return;
+    case EINVAL:
+      std::cout << "Invalid event" << std::endl;
+      return;
+    case EMFILE:
+      std::cout << "Not enough file descriptors available" << std::endl;
+      return;
+    case ENODEV:
+      std::cout << "Event not supported on this CPU" << std::endl;
+      return;
+    case ENOENT:
+      std::cout << "Invalid event type" << std::endl;
+      return;
+    case ENOSPC:
+      std::cout << "Too many hardware breakpoint events" << std::endl;
+      return;
+    case EOPNOTSUPP:
+      std::cout << "Hardware support not available" << std::endl;
+      return;
+    case EPERM:
+      std::cout << "Unsupported event exclusion setting" << std::endl;
+      return;
+    case ESRCH:
+      std::cout << "Invalid PID for event; PID = " << s->pid << std::endl;
+      return;
+    default:
+      std::cout << "Other performance counter error; errno = " << errno
+                << std::endl;
+      return;
+    }
+  }
+}
+
 void setupCounter(struct pcounter *s) {
   auto initArrays = [](auto &arr) {
     for (auto &outergroup : arr) {
@@ -57,66 +119,6 @@ void setupCounter(struct pcounter *s) {
             PERF_FORMAT_GROUP |
             PERF_FORMAT_ID; // format the result in our all-in-one data struct
       };
-  auto setupEvent = [&](auto &fd, auto &id, auto &st, auto gfd) {
-    fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, gfd, 0);
-    // std::cout << "fd = " << fd << std::endl;
-    if (fd > 0) {
-      ioctl(fd, PERF_EVENT_IOC_ID, &(id));
-    } else if (fd == -1) {
-      switch (errno) {
-      case E2BIG:
-        std::cout << "Event perfstruct is too small" << std::endl;
-        return;
-      case EACCES:
-        std::cout
-            << "Performance counters not permitted or available; try using a "
-               "newer Linux kernel or assigning the CAP_PERFMON capability"
-            << std::endl;
-        return;
-      case EBADF:
-        if (gfd > -1) {
-          std::cout << "Event group_fd not valid" << std::endl;
-        }
-        return;
-      case EBUSY:
-        std::cout
-            << "Another process has exclusive access to performance counters"
-            << std::endl;
-        return;
-      case EFAULT:
-        std::cout << "Invalid memory address" << std::endl;
-        return;
-      case EINVAL:
-        std::cout << "Invalid event" << std::endl;
-        return;
-      case EMFILE:
-        std::cout << "Not enough file descriptors available" << std::endl;
-        return;
-      case ENODEV:
-        std::cout << "Event not supported on this CPU" << std::endl;
-        return;
-      case ENOENT:
-        std::cout << "Invalid event type" << std::endl;
-        return;
-      case ENOSPC:
-        std::cout << "Too many hardware breakpoint events" << std::endl;
-        return;
-      case EOPNOTSUPP:
-        std::cout << "Hardware support not available" << std::endl;
-        return;
-      case EPERM:
-        std::cout << "Unsupported event exclusion setting" << std::endl;
-        return;
-      case ESRCH:
-        std::cout << "Invalid PID for event; PID = " << s->pid << std::endl;
-        return;
-      default:
-        std::cout << "Other performance counter error; errno = " << errno
-                  << std::endl;
-        return;
-      }
-    }
-  };
   // std::cout << "setting up counters for pid " << s->pid << std::endl;
   errno = 0;
   configureStruct(s->perfstruct[0][0], PERF_TYPE_HARDWARE,
@@ -124,12 +126,11 @@ void setupCounter(struct pcounter *s) {
   // PERF_COUNT_HW_CPU_CYCLES works on Intel and AMD (and wherever else this
   // event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES
   // only works on Intel (unsure? needs more testing) but is more accurate
-  setupEvent(s->gfd[0][0], s->gid[0][0], s->perfstruct[0][0],
-             -1); // put -1 for the group leader fd because we want to create a
-                  // group leader
+  // put -1 for the group leader fd because we want to create a  group leader
+  setupEvent(s, s->gfd[0][0], s->gid[0][0], s->perfstruct[0][0], -1);
   configureStruct(s->perfstruct[0][1], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_INSTRUCTIONS);
-  setupEvent(s->gfd[0][1], s->gid[0][1], s->perfstruct[0][1], s->gfd[0][0]);
+  setupEvent(s, s->gfd[0][1], s->gid[0][1], s->perfstruct[0][1], s->gfd[0][0]);
 }
 
 void createCounters(std::vector<struct pcounter *> &counters,
