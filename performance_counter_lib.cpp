@@ -40,7 +40,7 @@ std::string lookupErrorMessage(const int errnum) {
 }
 
 std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
-                                       pid_t pid) {
+                                       const pid_t pid) {
   std::vector<pid_t> pids{};
   const fs::path task_path{proc_path + std::to_string(pid) + "/task"};
   if (!fs::exists(task_path)) {
@@ -62,12 +62,17 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
   return pids;
 }
 
-void setupEvent(struct pcounter *s, int &fd, long long unsigned int &id,
-                perf_event_attr &st, int counter_fd) {
-  fd = syscall(SYS_perf_event_open, &(st), s->pid, -1, counter_fd, 0);
+void setupEvent(const struct pcounter &s, int &fd, long long unsigned int &id,
+                const perf_event_attr &st, int counter_fd) {
+  // pid > 0 and cpu == -1 measures the specified process/thread on any CPU.
+  fd = syscall(SYS_perf_event_open, &st, s.pid, -1, counter_fd, 0);
   // std::cout << "fd = " << fd << std::endl;
   if (fd > STDERR_FILENO) {
-    ioctl(fd, PERF_EVENT_IOC_ID, &(id));
+    //  PERF_EVENT_IOC_ID returns the event ID value for the given event file
+    //  descriptor.
+    // The argument is a pointer to a 64-bit unsigned integer to hold the
+    // result.
+    ioctl(fd, PERF_EVENT_IOC_ID, &id);
   } else {
     std::cout << lookupErrorMessage(errno) << std::endl;
   }
@@ -98,10 +103,10 @@ void setupCounter(struct pcounter *s) {
   // event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES
   // only works on Intel (unsure? needs more testing) but is more accurate
   // put -1 for the group leader fd because we want to create a  group leader
-  setupEvent(s, s->counter_fd[0], s->event_id[0], s->perfstruct[0], -1);
+  setupEvent(*s, s->counter_fd[0], s->event_id[0], s->perfstruct[0], -1);
   configureStruct(s->perfstruct[1], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_INSTRUCTIONS);
-  setupEvent(s, s->counter_fd[1], s->event_id[1], s->perfstruct[1],
+  setupEvent(*s, s->counter_fd[1], s->event_id[1], s->perfstruct[1],
              s->counter_fd[0]);
 }
 
