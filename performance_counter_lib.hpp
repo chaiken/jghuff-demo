@@ -17,6 +17,7 @@ namespace fs = std::filesystem;
 
 constexpr std::chrono::seconds SLEEPTIME = std::chrono::seconds(5);
 constexpr uint64_t SLEEPCOUNT = std::chrono::seconds(5).count();
+constexpr uint32_t BUFSIZE = 96U;
 
 struct read_format { // read_format is declared in a performance counter header.
                      // However, it is never defined, so we have to define it
@@ -30,6 +31,8 @@ struct read_format { // read_format is declared in a performance counter header.
 
 struct pcounter { // our Modern C++ abstraction for a generic performance
                   // counter group for a PID
+  pcounter(pid_t p) : pid(p), perfstruct{}, gid{}, gv{}, gfd{}, event_data{} {}
+
   pid_t pid;
 
   std::array<std::array<struct perf_event_attr, 1>, 2>
@@ -42,10 +45,11 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
   std::array<std::array<int, 1>, 2> gfd; // the file descriptors for the
                                          // counters
 
-  char buf[96]; // buf size equation: (maximum events counted * 16) + 8
-  struct read_format *data = reinterpret_cast<struct read_format *>(
-      buf); // in C, this would have been a void*, but C++ lets us do a raw
-            // conversion explicitly
+  union {
+    // buf size equation: (maximum events counted * 16) + 8
+    char buf[BUFSIZE];
+    struct read_format per_event_values;
+  } event_data;
 };
 
 void setLimits();

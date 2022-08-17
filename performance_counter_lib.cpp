@@ -156,10 +156,9 @@ void setupCounter(struct pcounter *s) {
 void createCounters(std::vector<struct pcounter *> &counters,
                     const std::vector<pid_t> &pids) {
   for (const auto &it : pids) {
-    counters.emplace_back(
-        new pcounter); // create a new pcounter object; don't use smart pointers
-                       // because they dereference to 0
-    counters.back()->pid = it;
+    counters.push_back(
+        new pcounter(it)); // create a new pcounter object; don't use smart
+                           // pointers because they dereference to 0
     // std::cout << "creating counter for pid " << counters.back()->pid <<
     // std::endl;
     setupCounter(counters.back());
@@ -185,7 +184,7 @@ void cullCounters(std::vector<struct pcounter *> &counters,
           }
         }
         // std::cout << "culling counter for pid " << s->pid << std::endl;
-        counters.erase(std::find(begin(counters), end(counters), s));
+        counters.erase(std::find(std::begin(counters), std::end(counters), s));
       }
     }
   }
@@ -220,22 +219,24 @@ void readCounters(std::vector<struct pcounter *> &counters) {
                          // deallocate memory for cin instead which leads to
                          // segmentation faults (borrow checkers can't prevent
                          // this because it happens in the kernel)
-      size = read(s->gfd[0][0], s->buf,
-                  sizeof(s->buf));        // get information from the counters
-      if (size >= MIN_COUNTER_READSIZE) { // check if there is sufficient data
-                                          // to read from. If
+      size =
+          read(s->gfd[0][0], s->event_data.buf,
+               sizeof(s->event_data.buf)); // get information from the counters
+      if (size >= MIN_COUNTER_READSIZE) {  // check if there is sufficient data
+                                           // to read from. If
         // not, then reading could give us false counter values
-        for (int i = 0; i < static_cast<int>(s->data->nr);
+        for (int i = 0; i < static_cast<int>(s->event_data.per_event_values.nr);
              i++) { // read data from all the events in the struct pointed to by
                     // data
-          if (s->data->values[i].id ==
-              s->gid[0][0]) { // data->values[i].id points to an event id, and
+          if (s->event_data.per_event_values.values[i].id ==
+              s->gid[0][0]) { // data.values[i].id points to an event id, and
                               // we want to match this id to the one belonging
                               // to event 1
-            s->gv[0][0] =
-                s->data->values[i].value; // store the counter value in g1v1
-          } else if (s->data->values[i].id == s->gid[0][1]) {
-            s->gv[0][1] = s->data->values[i].value;
+            s->gv[0][0] = s->event_data.per_event_values.values[i]
+                              .value; // store the counter value in g1v1
+          } else if (s->event_data.per_event_values.values[i].id ==
+                     s->gid[0][1]) {
+            s->gv[0][1] = s->event_data.per_event_values.values[i].value;
           }
         }
       }
