@@ -32,7 +32,7 @@ struct read_format { // read_format is declared in a performance counter header.
 struct pcounter { // our Modern C++ abstraction for a generic performance
                   // counter group for a PID
   pcounter(pid_t p)
-      : pid(p), perfstruct{}, event_id{}, event_value{}, counter_fd{},
+      : pid(p), perfstruct{}, event_id{}, event_value{}, group_fd{},
         event_data{} {}
 
   pid_t pid;
@@ -44,8 +44,10 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
   std::array<unsigned long long, 2> event_id{0, 0};
   // the values of the events
   std::array<unsigned long long, 2> event_value{0, 0};
-  // the file descriptors for the counters
-  std::array<int, 2> counter_fd{0, 0};
+  // the group file descriptors for the counters
+  // Each file descriptor corresponds to one event that is measured; these can
+  // be grouped  together  to  measure multiple events simultaneously.
+  std::array<int, 2> group_fd{0, 0};
 
   union {
     // buf size equation: (maximum events counted * 16) + 8

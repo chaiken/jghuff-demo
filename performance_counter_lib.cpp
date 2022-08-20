@@ -63,9 +63,9 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
 }
 
 void setupEvent(const struct pcounter &s, int &fd, long long unsigned int &id,
-                const perf_event_attr &st, int counter_fd) {
+                const perf_event_attr &st, int group_fd) {
   // pid > 0 and cpu == -1 measures the specified process/thread on any CPU.
-  fd = syscall(SYS_perf_event_open, &st, s.pid, -1, counter_fd, 0);
+  fd = syscall(SYS_perf_event_open, &st, s.pid, -1, group_fd, 0);
   // std::cout << "fd = " << fd << std::endl;
   if (fd > STDERR_FILENO) {
     //  PERF_EVENT_IOC_ID returns the event ID value for the given event file
@@ -103,11 +103,11 @@ void setupCounter(struct pcounter *s) {
   // event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES
   // only works on Intel (unsure? needs more testing) but is more accurate
   // put -1 for the group leader fd because we want to create a  group leader
-  setupEvent(*s, s->counter_fd[0], s->event_id[0], s->perfstruct[0], -1);
+  setupEvent(*s, s->group_fd[0], s->event_id[0], s->perfstruct[0], -1);
   configureStruct(s->perfstruct[1], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_INSTRUCTIONS);
-  setupEvent(*s, s->counter_fd[1], s->event_id[1], s->perfstruct[1],
-             s->counter_fd[0]);
+  setupEvent(*s, s->group_fd[1], s->event_id[1], s->perfstruct[1],
+             s->group_fd[0]);
 }
 
 void createCounters(std::vector<struct pcounter *> &counters,
@@ -127,7 +127,7 @@ void cullCounters(std::vector<struct pcounter *> &counters,
   for (const auto culledpid : pids) {
     for (auto &counter : counters) {
       if (counter->pid == culledpid) {
-        for (const auto filedescriptor : counter->counter_fd) {
+        for (const auto filedescriptor : counter->group_fd) {
           if (filedescriptor > STDERR_FILENO) {
             // std::cout << "closing fd " << filedescriptor << std::endl;
             // events, and performance counters as a  whole, are nothing but
@@ -146,7 +146,7 @@ void cullCounters(std::vector<struct pcounter *> &counters,
 
 void resetAndEnableCounters(const std::vector<struct pcounter *> &counters) {
   for (const auto &counter : counters) {
-    for (const auto &group : counter->counter_fd) {
+    for (const auto &group : counter->group_fd) {
       // reset the counters for ALL the events that are members of the group
       ioctl(group, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
       // enable all the events that are members of the group
@@ -157,7 +157,7 @@ void resetAndEnableCounters(const std::vector<struct pcounter *> &counters) {
 
 void disableCounters(const std::vector<struct pcounter *> &counters) {
   for (const auto &counter : counters) {
-    for (const auto &group : counter->counter_fd) {
+    for (const auto &group : counter->group_fd) {
       // disable all counters in the groups
       ioctl(group, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
     }
@@ -171,8 +171,8 @@ void readCounters(std::vector<struct pcounter *> &counters) {
     // Linux will deallocate memory for cin instead which leads to segmentation
     // faults (borrow checkers can't prevent  this because it happens in the
     // kernel)
-    if (counter->counter_fd[0] > STDERR_FILENO) {
-      size = read(counter->counter_fd[0], counter->event_data.buf,
+    if (counter->group_fd[0] > STDERR_FILENO) {
+      size = read(counter->group_fd[0], counter->event_data.buf,
                   sizeof(counter->event_data.buf));
       //  If false, reading could give us false counter values.
       if (size >= MIN_COUNTER_READSIZE) {
