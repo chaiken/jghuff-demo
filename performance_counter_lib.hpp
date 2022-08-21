@@ -57,16 +57,15 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
 };
 
 std::vector<pid_t> getProcessChildPids(const std::string &proc_path, pid_t pid);
+
 void createCounters(std::vector<struct pcounter *> &counters,
                     const std::vector<pid_t> &pids);
+
 void resetAndEnableCounters(const std::vector<struct pcounter *> &counters);
 
 void disableCounters(const std::vector<struct pcounter *> &counters);
 
 void readCounters(std::vector<struct pcounter *> &counters);
-
-void createCounters(std::vector<struct pcounter *> &counters,
-                    const std::vector<pid_t> &pids);
 
 void cullCounters(std::vector<struct pcounter *> &counters,
                   const std::vector<pid_t> &pids);
