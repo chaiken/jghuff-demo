@@ -23,7 +23,7 @@ struct PcLibTest : public ::testing::Test {
       ASSERT_TRUE(fs::create_directory(subpath));
     }
   }
-  void TearDown() { ASSERT_NE(-1, fs::remove_all(test_path)); }
+  void TearDown() { ASSERT_NE(-1, fs::remove_all(TEST_PATH)); }
   fs::path test_path;
   pid_t pid = INT_MIN;
 };
