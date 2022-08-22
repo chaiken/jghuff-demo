@@ -5,6 +5,20 @@
 constexpr uint32_t MIN_COUNTER_READSIZE = 40;
 constexpr uint32_t BILLION = 1e9;
 
+namespace {
+std::pair<bool, uint64_t> safe_strtoul(const std::string &str) {
+  std::pair<bool, uint64_t> retval;
+  errno = 0;
+  retval.second = strtoul(str.c_str(), NULL, 10);
+  if (errno) {
+    retval.first = false;
+    return retval;
+  }
+  retval.first = true;
+  return retval;
+}
+} // namespace
+
 std::string lookupErrorMessage(const int errnum) {
   switch (errnum) {
   case E2BIG:
@@ -51,12 +65,18 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
     std::regex re(proc_path + "\\d+/task/", std::regex_constants::optimize);
     for (const auto &dir :
          fs::directory_iterator{proc_path + std::to_string(pid) + "/task"}) {
-      pids.emplace_back(std::stol(std::regex_replace(
-          dir.path().string(), re,
-          ""))); // the full value of dir.path().string() looks like
-                 // /proc/the_PID/task/some_number. Remove /proc/the_PID/task/
-                 // to yield just the number of the child PID, then add it to
-                 // our list of the found child(ren)
+      // the full value of dir.path().string() looks like
+      // /proc/the_PID/task/some_number. Remove /proc/the_PID/task/ to yield
+      // just the number of the child PID, then add it to our list of the found
+      // child(ren)
+      std::string pidstr = std::regex_replace(dir.path().string(), re, "");
+      std::pair<bool, uint64_t> res = safe_strtoul(pidstr);
+      if (!res.first) {
+        std::cerr << "Failed numeric conversion of " << dir.path().string()
+                  << " with " << strerror(errno) << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      pids.emplace_back(res.second);
     }
   }
   return pids;
