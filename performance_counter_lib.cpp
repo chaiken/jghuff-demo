@@ -200,7 +200,7 @@ void readCounters(std::vector<struct pcounter> &counters) {
         for (int i = 0;
              i < static_cast<int>(counter.event_data.per_event_values.nr);
              i++) {
-          // we want to match this id to the one belonging to event 1
+          //  Match the cycle count for an event with its instruction count.
           if (counter.event_data.per_event_values.values[i].id ==
               counter.event_id[0]) {
             counter.event_value[0] =
@@ -211,7 +211,12 @@ void readCounters(std::vector<struct pcounter> &counters) {
                 counter.event_data.per_event_values.values[i].value;
           }
         }
+      } else {
+        std::cerr << "Failed to read counter  for group " << counter.group_fd[0]
+                  << std::endl;
       }
+    } else {
+      std::cerr << "Bad file descriptor for task " << counter.pid << std::endl;
     }
   }
 }
