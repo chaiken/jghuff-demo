@@ -56,22 +56,24 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
   } event_data;
 };
 
+bool operator==(const struct pcounter &a, const struct pcounter &b);
+
 std::vector<pid_t> getProcessChildPids(const std::string &proc_path, pid_t pid);
 
-void createCounters(std::vector<struct pcounter *> &counters,
+void createCounters(std::vector<struct pcounter> &counters,
                     const std::vector<pid_t> &pids);
 
-void resetAndEnableCounters(const std::vector<struct pcounter *> &counters);
+void resetAndEnableCounters(const std::vector<struct pcounter> &counters);
 
-void disableCounters(const std::vector<struct pcounter *> &counters);
+void disableCounters(const std::vector<struct pcounter> &counters);
 
-void readCounters(std::vector<struct pcounter *> &counters);
+void readCounters(std::vector<struct pcounter> &counters);
 
-void cullCounters(std::vector<struct pcounter *> &counters,
+void cullCounters(std::vector<struct pcounter> &counters,
                   const std::vector<pid_t> &pids);
 
 void printResults(const long long cycles, const long long instructions);
 
 void getPidDelta(const std::string &proc_path, const pid_t pid,
-                 std::vector<struct pcounter *> &MyCounters,
+                 std::vector<struct pcounter> &MyCounters,
                  std::vector<pid_t> &currentPids);

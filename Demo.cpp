@@ -47,7 +47,7 @@ int main() {
   setLimits();
 
   // our counter and PID data
-  std::vector<struct pcounter *> MyCounters = {};
+  std::vector<struct pcounter> MyCounters = {};
 
   // get a PID to track from the user
   std::string input;
@@ -79,8 +79,8 @@ int main() {
     long long cycles = 0;
     long long instructions = 0;
     for (const auto &s : MyCounters) {
-      cycles += s->event_value[0];
-      instructions += s->event_value[1];
+      cycles += s.event_value[0];
+      instructions += s.event_value[1];
     }
     printResults(cycles, instructions);
     getPidDelta(PROC_PATH, pid, MyCounters, currentPids);
