@@ -19,14 +19,25 @@ constexpr std::chrono::seconds SLEEPTIME = std::chrono::seconds(5);
 constexpr uint64_t SLEEPCOUNT = std::chrono::seconds(5).count();
 constexpr uint32_t BUFSIZE = 96U;
 
+// The two kinds of perf events that are observed.
+constexpr uint32_t CYCLES = 0U;
+constexpr uint32_t INSTRUCTIONS = 1U;
+constexpr uint32_t OBSERVED_EVENTS = 2U;
+
 struct read_format { // read_format is declared in a performance counter header.
                      // However, it is never defined, so we have to define it
                      // ourselves
-  unsigned long long nr = 0; // how many events there are
+  read_format() {}
+
+  unsigned long long nr; // how many events there are
+  // Array values has two elements because there are two kinds of perf events
+  // observed.
   struct {
-    unsigned long long value; // the value of event nr
-    unsigned long long id;    // the id of event nr
-  } values[];
+    // the value of a particular event
+    unsigned long long value;
+    // the id of a particular event
+    unsigned long long id;
+  } values[OBSERVED_EVENTS];
 };
 
 struct pcounter { // our Modern C++ abstraction for a generic performance

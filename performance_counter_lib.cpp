@@ -121,16 +121,18 @@ void configureStruct(struct perf_event_attr &st, const perf_type_id perftype,
 void setupCounter(struct pcounter &s) {
   // std::cout << "setting up counters for pid " << s.pid << std::endl;
   errno = 0;
-  configureStruct(s.perfstruct[0], PERF_TYPE_HARDWARE,
+  configureStruct(s.perfstruct[CYCLES], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_CPU_CYCLES);
   // PERF_COUNT_HW_CPU_CYCLES works on Intel and AMD (and wherever else this
   // event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES
   // only works on Intel (unsure? needs more testing) but is more accurate
   // put -1 for the group leader fd because we want to create a  group leader
-  setupEvent(s, s.group_fd[0], s.event_id[0], s.perfstruct[0], -1);
-  configureStruct(s.perfstruct[1], PERF_TYPE_HARDWARE,
+  setupEvent(s, s.group_fd[CYCLES], s.event_id[CYCLES], s.perfstruct[CYCLES],
+             -1);
+  configureStruct(s.perfstruct[INSTRUCTIONS], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_INSTRUCTIONS);
-  setupEvent(s, s.group_fd[1], s.event_id[1], s.perfstruct[1], s.group_fd[0]);
+  setupEvent(s, s.group_fd[INSTRUCTIONS], s.event_id[INSTRUCTIONS],
+             s.perfstruct[INSTRUCTIONS], s.group_fd[CYCLES]);
 }
 
 void createCounters(std::vector<struct pcounter> &counters,
@@ -192,8 +194,8 @@ void readCounters(std::vector<struct pcounter> &counters) {
     // Linux will deallocate memory for cin instead which leads to segmentation
     // faults (borrow checkers can't prevent  this because it happens in the
     // kernel)
-    if (counter.group_fd[0] > STDERR_FILENO) {
-      size = read(counter.group_fd[0], counter.event_data.buf,
+    if (counter.group_fd[CYCLES] > STDERR_FILENO) {
+      size = read(counter.group_fd[CYCLES], counter.event_data.buf,
                   sizeof(counter.event_data.buf));
       //  If false, reading could give us false counter values.
       if (size >= MIN_COUNTER_READSIZE) {
@@ -202,18 +204,18 @@ void readCounters(std::vector<struct pcounter> &counters) {
              i++) {
           //  Match the cycle count for an event with its instruction count.
           if (counter.event_data.per_event_values.values[i].id ==
-              counter.event_id[0]) {
-            counter.event_value[0] =
+              counter.event_id[CYCLES]) {
+            counter.event_value[CYCLES] =
                 counter.event_data.per_event_values.values[i].value;
           } else if (counter.event_data.per_event_values.values[i].id ==
-                     counter.event_id[1]) {
-            counter.event_value[1] =
+                     counter.event_id[INSTRUCTIONS]) {
+            counter.event_value[INSTRUCTIONS] =
                 counter.event_data.per_event_values.values[i].value;
           }
         }
       } else {
-        std::cerr << "Failed to read counter  for group " << counter.group_fd[0]
-                  << std::endl;
+        std::cerr << "Failed to read counter  for group "
+                  << counter.group_fd[CYCLES] << std::endl;
       }
     } else {
       std::cerr << "Bad file descriptor for task " << counter.pid << std::endl;
