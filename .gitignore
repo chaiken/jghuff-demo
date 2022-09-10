@@ -47,3 +47,5 @@ Demo
 *.txt
 
 .gdb_history
+# notes directory
+notes
