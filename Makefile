@@ -23,7 +23,7 @@ CLANG_TIDY_CLANG_OPTIONS=-std=c++17 -x c++
 CLANG_TIDY_CHECKS=bugprone,core,cplusplus,cppcoreguidelines,deadcode,modernize,performance,readability,security,unix,apiModeling.StdCLibraryFunctions,apiModeling.google.GTest
 
 clean:
-	rm -rf *.o *~ Demo
+	rm -rf *.o *~ Demo performance_counter_lib_test
 
 performance_counter_lib: performance_counter_lib.cpp performance_counter_lib.hpp
 
