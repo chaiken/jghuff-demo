@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 
 constexpr std::chrono::seconds SLEEPTIME = std::chrono::seconds(5);
 constexpr uint64_t SLEEPCOUNT = std::chrono::seconds(5).count();
-constexpr uint32_t BUFSIZE = 96U;
+constexpr uint32_t MIN_COUNTER_READSIZE = 40;
 
 // The two kinds of perf events that are observed.
 constexpr uint32_t CYCLES = 0U;
@@ -62,7 +62,7 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
 
   union {
     // buf size equation: (maximum events counted * 16) + 8
-    char buf[BUFSIZE];
+    char buf[MIN_COUNTER_READSIZE];
     struct read_format per_event_values;
   } event_data;
 };

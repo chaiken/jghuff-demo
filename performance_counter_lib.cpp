@@ -2,7 +2,6 @@
 
 #include <cstring>
 
-constexpr uint32_t MIN_COUNTER_READSIZE = 40;
 constexpr uint32_t BILLION = 1e9;
 
 namespace {
@@ -86,6 +85,8 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
   return pids;
 }
 
+// The only use for the second event group_fd is the ioctl that associates the
+// second event with the group created when the first event was enabled.
 void setupEvent(const struct pcounter &s, int &fd, long long unsigned int &id,
                 const perf_event_attr &st, int group_fd) {
   // pid > 0 and cpu == -1 measures the specified process/thread on any CPU.
@@ -113,6 +114,10 @@ void configureStruct(struct perf_event_attr &st, const perf_type_id perftype,
   st.config = config; // the event we want to measure
   st.disabled = true; // start disabled by default to not count, and skip
                       // extra syscalls to disable upon creation
+  /* Specifies the format of the data returned by read(2) on a perf_event_open()
+     file descriptor. PERF_FORMAT_ID Adds a 64-bit unique value that corresponds
+     to the  event group. PERF_FORMAT_GROUP Allows  all  counter  values in an
+     event group to be read with one read. */
   st.read_format =
       PERF_FORMAT_GROUP |
       PERF_FORMAT_ID; // format the result in our all-in-one data struct
@@ -156,7 +161,12 @@ void cullCounters(std::vector<struct pcounter> &counters,
             // events, and performance counters as a  whole, are nothing but
             // file descriptors,  so we can simply close them to get rid of
             // counters
-            close(filedescriptor);
+            errno = 0;
+            int res = close(filedescriptor);
+            if (res) {
+              std::cerr << "Error closing fd " << filedescriptor << " "
+                        << strerror(errno) << std::endl;
+            }
           }
         }
         // std::cout << "culling counter for pid " << counter.pid << std::endl;
@@ -188,17 +198,20 @@ void disableCounters(const std::vector<struct pcounter> &counters) {
 }
 
 void readCounters(std::vector<struct pcounter> &counters) {
-  long size;
   for (auto &counter : counters) {
     // checks if this fd is "good." If  it's an unused file descriptor, then
     // Linux will deallocate memory for cin instead which leads to segmentation
     // faults (borrow checkers can't prevent  this because it happens in the
     // kernel)
     if (counter.group_fd[CYCLES] > STDERR_FILENO) {
-      size = read(counter.group_fd[CYCLES], counter.event_data.buf,
-                  sizeof(counter.event_data.buf));
+      errno = 0;
+      // The second event's counts are available via the group to which it and
+      // the first event belong.   It's not obvious that a read to the second
+      // event's group_fd will even succeeed.
+      ssize_t size = read(counter.group_fd[CYCLES], counter.event_data.buf,
+                          sizeof(counter.event_data.buf));
       //  If false, reading could give us false counter values.
-      if (size >= MIN_COUNTER_READSIZE) {
+      if (size == MIN_COUNTER_READSIZE) {
         for (int i = 0;
              i < static_cast<int>(counter.event_data.per_event_values.nr);
              i++) {
@@ -214,8 +227,13 @@ void readCounters(std::vector<struct pcounter> &counters) {
           }
         }
       } else {
-        std::cerr << "Failed to read counter  for group "
-                  << counter.group_fd[CYCLES] << std::endl;
+        if (errno) {
+          std::cerr << strerror(errno) << " " << counter.group_fd[CYCLES]
+                    << std::endl;
+        } else {
+          std::cerr << "Insufficient data " << size << " bytes for group "
+                    << counter.group_fd[CYCLES] << std::endl;
+        }
       }
     } else {
       std::cerr << "Bad file descriptor for task " << counter.pid << std::endl;
