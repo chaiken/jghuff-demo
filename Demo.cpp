@@ -44,6 +44,10 @@ void setLimits() {
 }
 
 int main(int argc, char **argv) {
+  if (geteuid()) {
+    fprintf(stderr, "Please run the program with sudo.\n");
+    exit(EXIT_FAILURE);
+  }
   setLimits();
 
   // our counter and PID data
