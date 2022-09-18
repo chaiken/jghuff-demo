@@ -56,12 +56,12 @@ struct PcLibTest : public ::testing::Test {
       std::cerr << "Write failed: " << strerror(errno) << std::endl;
       return -1;
     }
-    // Fails on a claim that
+    // The following assertion produces an error "void value is not ignored as
+    // it should be". ASSERT_EQ(0, syncfs(group_leader_fd)); The actual function
+    // signature comes from linux/fs/sync.c
     // /home/alison/gitsrc/googletest/googletest/include/gtest/gtest.h:62
-    // already defines _GNU_SOURCE
-    // Produces an error "void value is not ignored as it should be".
-    // ASSERT_EQ(0, syncfs(group_leader_fd));
-    // The actual function signature comes from linux/fs/sync.c
+    // already defines _GNU_SOURCE, so that is not the problem.
+    // Flush the file to disk.
     syncfs(group_leader_fd);
     return written;
   }

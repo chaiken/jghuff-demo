@@ -85,9 +85,9 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
   return pids;
 }
 
-// The only use for the second event group_fd is the ioctl that associates the
+// The only user of the second event group_fd is the ioctl that associates the
 // second event with the group created when the first event was enabled.
-void setupEvent(const struct pcounter &s, int &fd, long long unsigned int &id,
+void setupEvent(const struct pcounter &s, int &fd, uint64_t &id,
                 const perf_event_attr &st, int group_fd) {
   // pid > 0 and cpu == -1 measures the specified process/thread on any CPU.
   fd = syscall(SYS_perf_event_open, &st, s.pid, -1, group_fd, 0);
@@ -116,8 +116,8 @@ void configureStruct(struct perf_event_attr &st, const perf_type_id perftype,
                       // extra syscalls to disable upon creation
   /* Specifies the format of the data returned by read(2) on a perf_event_open()
      file descriptor. PERF_FORMAT_ID Adds a 64-bit unique value that corresponds
-     to the  event group. PERF_FORMAT_GROUP Allows  all  counter  values in an
-     event group to be read with one read. */
+     to the  event group. PERF_FORMAT_GROUP sets all  counter  values in an
+     event group to be read with one read(). */
   st.read_format =
       PERF_FORMAT_GROUP |
       PERF_FORMAT_ID; // format the result in our all-in-one data struct
@@ -211,7 +211,7 @@ void readCounters(std::vector<struct pcounter> &counters) {
       ssize_t size = read(counter.group_fd[CYCLES], counter.event_data.buf,
                           sizeof(counter.event_data.buf));
       //  If false, reading could give us false counter values.
-      if (size == MIN_COUNTER_READSIZE) {
+      if (size == COUNTER_READSIZE) {
         for (int i = 0;
              i < static_cast<int>(counter.event_data.per_event_values.nr);
              i++) {
@@ -268,7 +268,7 @@ void getPidDelta(const std::string &proc_path, const pid_t pid,
 // in real programs, this section should be in the calling thread
 // we only access our frontend variables here, as everything having to do
 // with counters is abstracted away elsewhere
-void printResults(const long long cycles, const long long instructions) {
+void printResults(const uint64_t cycles, const uint64_t instructions) {
   if (!cycles) {
     return;
   }
