@@ -43,22 +43,37 @@ void setLimits() {
   }
 }
 
-int main() {
+int main(int argc, char **argv) {
   setLimits();
 
   // our counter and PID data
   std::vector<struct pcounter> MyCounters = {};
+  pid_t pid;
 
   // get a PID to track from the user
-  std::string input;
-  pid_t pid;
-  std::cout << "Enter a PID " << std::flush;
-  std::cin >> input;
-  try {
-    pid = std::stol(input);
-  } catch (...) { // PID must be a number
-    std::cout << "Invalid PID" << std::endl;
-    return 1;
+  if (argc > 2) {
+    fprintf(stderr, "Usage is 'sudo ./Demo <pid>'.\n");
+    exit(EXIT_FAILURE);
+  }
+  if (2 == argc) {
+    errno = 0;
+    long val{strtol(argv[1], NULL, 10)};
+    if (errno || (0 == val)) {
+      fprintf(stderr, "%s is not a valid PID.\n", argv[1]);
+      exit(EXIT_FAILURE);
+    }
+    pid = val;
+  }
+  if (!pid) {
+    std::string input;
+    std::cout << "Enter a PID " << std::flush;
+    std::cin >> input;
+    try {
+      pid = std::stol(input);
+    } catch (...) { // PID must be a number
+      std::cout << "Invalid PID" << std::endl;
+      return 1;
+    }
   }
 
   // the next step is to make counters for all the known children of our newly
