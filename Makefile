@@ -13,6 +13,7 @@ GTEST_LIBS= $(GTEST_LIB_PATH)/libgtest.a $(GTEST_LIB_PATH)/libgtest_main.a
 
 CXX=/usr/bin/g++
 CXXFLAGS = -std=c++17 -ggdb -Wall -Wextra -Werror -g -O0 -fno-inline -fsanitize=address,undefined -isystem $(GTEST_HEADERS)
+CXXFLAGS-NOSANITIZE = -std=c++17 -ggdb -Wall -Wextra -Werror -g -O0 -fno-inline -isystem $(GTEST_HEADERS)
 LDFLAGS= -ggdb -g -fsanitize=address -L$(GTEST_LIB_PATH)
 LDFLAGS-NOSANITIZE= -ggdb -g -L$(GTEST_LIB_PATH)
 LDFLAGS-NOTEST= -ggdb -g -fsanitize=address
@@ -41,3 +42,12 @@ setcaps: Demo
 Demo-clang-tidy: Demo.cpp performance_counter_lib.cpp performance_counter_lib.hpp performance_counter_lib_test.cpp
 	make clean
 	$(CLANG_TIDY_BINARY) $(CLANG_TIDY_OPTIONS) -checks=$(CLANG_TIDY_CHECKS)  performance_counter_lib.cpp Demo.cpp performance_counter_lib.hpp performance_counter_lib_test.cpp -- $(CLANG_TIDY_CLANG_OPTIONS)
+
+COVERAGE_EXTRA_FLAGS = --coverage
+
+performance_counter_lib_test_coverage: CXXFLAGS = $(CXXFLAGS-NOSANITIZE) $(COVERAGE_EXTRA_FLAGS)
+performance_counter_lib_test_coverage: LDFLAGS = $(LDFLAGS-NOSANITIZE)
+performance_counter_lib_test_coverage:  performance_counter_lib_test.cpp performance_counter_lib.cpp $(GTESTHEADERS)
+	make clean
+	$(CXX) $(CXXFLAGS)  $(LDFLAGS) $^ $(GTEST_LIBS) -o $@
+	run_lcov.sh
