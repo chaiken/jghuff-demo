@@ -87,17 +87,17 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
 
 // The only user of the second event group_fd is the ioctl that associates the
 // second event with the group created when the first event was enabled.
-void setupEvent(const struct pcounter &s, int &fd, uint64_t &id,
-                const perf_event_attr &st, int group_fd) {
+void setupEvent(struct pcounter &s, uint32_t event_num, int group_fd) {
   // pid > 0 and cpu == -1 measures the specified process/thread on any CPU.
-  fd = syscall(SYS_perf_event_open, &st, s.pid, -1, group_fd, 0);
+  s.group_fd[event_num] = syscall(SYS_perf_event_open, &s.perfstruct[event_num],
+                                  s.pid, -1, group_fd, 0);
   // std::cout << "fd = " << fd << std::endl;
-  if (fd > STDERR_FILENO) {
+  if (s.group_fd[event_num] > STDERR_FILENO) {
     //  PERF_EVENT_IOC_ID returns the event ID value for the given event file
     //  descriptor.
     // The argument is a pointer to a 64-bit unsigned integer to hold the
     // result.
-    ioctl(fd, PERF_EVENT_IOC_ID, &id);
+    ioctl(s.group_fd[event_num], PERF_EVENT_IOC_ID, &s.event_id[event_num]);
   } else {
     std::cout << lookupErrorMessage(errno) << std::endl;
   }
@@ -126,18 +126,19 @@ void configureStruct(struct perf_event_attr &st, const perf_type_id perftype,
 void setupCounter(struct pcounter &s) {
   // std::cout << "setting up counters for pid " << s.pid << std::endl;
   errno = 0;
-  configureStruct(s.perfstruct[CYCLES], PERF_TYPE_HARDWARE,
-                  PERF_COUNT_HW_CPU_CYCLES);
   // PERF_COUNT_HW_CPU_CYCLES works on Intel and AMD (and wherever else this
   // event is supported) but could be inaccurate. PERF_COUNT_HW_REF_CPU_CYCLES
   // only works on Intel (unsure? needs more testing) but is more accurate
-  // put -1 for the group leader fd because we want to create a  group leader
-  setupEvent(s, s.group_fd[CYCLES], s.event_id[CYCLES], s.perfstruct[CYCLES],
-             -1);
+  configureStruct(s.perfstruct[CYCLES], PERF_TYPE_HARDWARE,
+                  PERF_COUNT_HW_CPU_CYCLES);
+  // Create the event group with s.group_fd[CYCLES] and associate the CYCLES
+  // event_id with it.
+  setupEvent(s, CYCLES, -1);
   configureStruct(s.perfstruct[INSTRUCTIONS], PERF_TYPE_HARDWARE,
                   PERF_COUNT_HW_INSTRUCTIONS);
-  setupEvent(s, s.group_fd[INSTRUCTIONS], s.event_id[INSTRUCTIONS],
-             s.perfstruct[INSTRUCTIONS], s.group_fd[CYCLES]);
+  // Associate the event_id for the INSTRUCTIONS event with the group_fd created
+  // for the CYCLES event.
+  setupEvent(s, INSTRUCTIONS, s.group_fd[CYCLES]);
 }
 
 void createCounters(std::vector<struct pcounter> &counters,
