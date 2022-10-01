@@ -72,9 +72,12 @@ struct PcLibTest : public ::testing::Test {
       unique_ptr<struct read_format> per_event_values(new struct read_format);
       per_event_values->nr = OBSERVED_EVENTS;
       per_event_values->values[CYCLES].id = ctr + 1;
+      counter.event_id[CYCLES] = per_event_values->values[CYCLES].id;
       per_event_values->values[CYCLES].value = ctr + 2;
       per_event_values->values[INSTRUCTIONS].id = ctr + 3;
       per_event_values->values[INSTRUCTIONS].value = ctr + 4;
+      counter.event_id[INSTRUCTIONS] =
+          per_event_values->values[INSTRUCTIONS].id;
       ASSERT_EQ(
           tryWriteCounterFds(counter.group_fd[CYCLES], move(per_event_values)),
           sizeof(struct read_format));
@@ -172,11 +175,16 @@ TEST_F(PcLibTest, readCounters) {
 
   int idx = 0;
   for (const struct pcounter &counter : counters) {
+    EXPECT_EQ(idx, counter.pid);
     EXPECT_EQ(OBSERVED_EVENTS, counter.event_data.per_event_values.nr);
     EXPECT_EQ(idx + 1, counter.event_data.per_event_values.values[CYCLES].id);
+    EXPECT_EQ(counter.event_id[CYCLES],
+              counter.event_data.per_event_values.values[CYCLES].id);
     EXPECT_EQ(idx + 2,
               counter.event_data.per_event_values.values[CYCLES].value);
     EXPECT_EQ(idx + 3,
+              counter.event_data.per_event_values.values[INSTRUCTIONS].id);
+    EXPECT_EQ(counter.event_id[INSTRUCTIONS],
               counter.event_data.per_event_values.values[INSTRUCTIONS].id);
     EXPECT_EQ(idx + 4,
               counter.event_data.per_event_values.values[INSTRUCTIONS].value);
