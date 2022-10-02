@@ -10,6 +10,7 @@ using namespace std;
 
 constexpr char TEST_PATH[] = "testdata/";
 constexpr int32_t NUMDIRS = 20;
+constexpr pid_t FAKE_PID = 1234;
 
 namespace local_testing {
 
@@ -18,6 +19,8 @@ struct PcLibTest : public ::testing::Test {
     pid = new_pid;
     fs::current_path(fs::temp_directory_path());
     test_path = TEST_PATH + to_string(new_pid) + "/task";
+    // Clean up mess from any aborted tests.
+    std::filesystem::remove_all(test_path);
     ASSERT_TRUE(fs::create_directories(test_path));
     for (int i = 0; i < NUMDIRS; i++) {
       fs::path subpath = test_path;
@@ -86,7 +89,7 @@ struct PcLibTest : public ::testing::Test {
     }
   }
 
-  void SetUp() { createDirs(1234); }
+  void SetUp() { createDirs(FAKE_PID); }
   void TearDown() {
     ASSERT_NE(-1, fs::remove_all(TEST_PATH));
     ASSERT_TRUE(!fs::exists(TEST_PATH));
@@ -106,7 +109,7 @@ TEST_F(PcLibTest, getProcessChildPids) {
   EXPECT_NE(pids.end(), std::find(pids.begin(), pids.end(), 19));
   EXPECT_EQ(pids.end(), std::find(pids.begin(), pids.end(), 20));
 
-  pids = getProcessChildPids("testdata/", 4321);
+  pids = getProcessChildPids(TEST_PATH, 4321);
   ASSERT_EQ(0u, pids.size());
 }
 
@@ -199,6 +202,41 @@ TEST_F(PcLibTest, readCounters) {
     EXPECT_EQ(0, close(it->second.group_fd[INSTRUCTIONS]));
     idx++;
   }
+}
+
+TEST_F(PcLibTest, getPidDelta) {
+  createFakeCounters();
+  ASSERT_EQ(NUMDIRS, counters.size());
+  std::set<pid_t> pids = getProcessChildPids(TEST_PATH, FAKE_PID);
+  ASSERT_EQ(NUMDIRS, pids.size());
+
+  // Remove tasks with even-numbered PIDs.
+  for (const std::filesystem::directory_entry &dir_entry :
+       std::filesystem::directory_iterator(test_path)) {
+    std::string task_name{dir_entry.path().filename()};
+    // Make sure that the PID has only appropriate characters.
+    // strtoul() returns 0 when presented with alphabetic characters.
+    ASSERT_TRUE(std::all_of(task_name.begin(), task_name.end(),
+                            [](char c) { return isdigit(c); }));
+    errno = 0;
+    uint64_t numeric_name = strtoul(basename(task_name.c_str()), nullptr, 10);
+    if (ULONG_MAX == static_cast<unsigned long>(numeric_name)) {
+      if (errno) {
+        perror(strerror(errno));
+      }
+      std::cerr << "Bad directory name " << dir_entry.path() << std::endl;
+    }
+    // Remove directories corresponding to odd-numbered PIDs.
+    if (1 == (numeric_name % 2)) {
+      // Remove the task's top-level directory and the two files.
+      EXPECT_EQ(3, std::filesystem::remove_all(dir_entry.path()));
+    }
+  }
+  // Check that the fake procfs is correct.
+  std::set<pid_t> new_pids = getProcessChildPids(TEST_PATH, FAKE_PID);
+  ASSERT_EQ(pids.size() / 2u, new_pids.size());
+  getPidDelta(TEST_PATH, FAKE_PID, counters, pids);
+  ASSERT_EQ(NUMDIRS / 2u, counters.size());
 }
 
 } // namespace local_testing
