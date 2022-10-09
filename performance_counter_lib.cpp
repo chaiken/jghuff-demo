@@ -56,9 +56,9 @@ bool operator==(const struct pcounter &a, const struct pcounter &b) {
   return (a.pid == b.pid);
 }
 
-std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
-                                       const pid_t pid) {
-  std::vector<pid_t> pids{};
+std::set<pid_t> getProcessChildPids(const std::string &proc_path,
+                                    const pid_t pid) {
+  std::set<pid_t> pids{};
   const fs::path task_path{proc_path + std::to_string(pid) + "/task"};
   if (!fs::exists(task_path)) {
     std::cout << "No such PID " << pid
@@ -79,7 +79,7 @@ std::vector<pid_t> getProcessChildPids(const std::string &proc_path,
                   << " with " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
       }
-      pids.emplace_back(res.second);
+      pids.emplace(res.second);
     }
   }
   return pids;
@@ -141,22 +141,25 @@ void setupCounter(struct pcounter &s) {
   setupEvent(s, INSTRUCTIONS, s.group_fd[CYCLES]);
 }
 
-void createCounters(std::vector<struct pcounter> &counters,
-                    const std::vector<pid_t> &pids) {
+void createCounters(std::map<pid_t, struct pcounter> &counters,
+                    const std::set<pid_t> &pids) {
   for (const auto &pid : pids) {
-    counters.push_back(pcounter(pid));
+    struct pcounter newpc(pid);
+    setupCounter(newpc);
+    counters.insert(std::pair<pid_t, struct pcounter>{pid, newpc});
     // std::cout << "creating counter for pid " << counters.back()->pid <<
     // std::endl;
-    setupCounter(counters.back());
   }
 }
 
-void cullCounters(std::vector<struct pcounter> &counters,
-                  const std::vector<pid_t> &pids) {
+void cullCounters(std::map<pid_t, struct pcounter> &counters,
+                  const std::set<pid_t> &pids) {
   for (const auto culledpid : pids) {
-    for (auto &counter : counters) {
-      if (counter.pid == culledpid) {
-        for (const auto filedescriptor : counter.group_fd) {
+    for (auto it = counters.begin(); it != counters.end(); it++) {
+      // First element is the key, which is the PID.
+      if (it->first == culledpid) {
+        // Second element is the pcounter associated with the PID.
+        for (const auto filedescriptor : it->second.group_fd) {
           if (filedescriptor > STDERR_FILENO) {
             // std::cout << "closing fd " << filedescriptor << std::endl;
             // events, and performance counters as a  whole, are nothing but
@@ -171,16 +174,16 @@ void cullCounters(std::vector<struct pcounter> &counters,
           }
         }
         // std::cout << "culling counter for pid " << counter.pid << std::endl;
-        counters.erase(
-            std::find(std::begin(counters), std::end(counters), counter));
+        counters.erase(it);
       }
     }
   }
 }
 
-void resetAndEnableCounters(const std::vector<struct pcounter> &counters) {
-  for (const auto &counter : counters) {
-    for (const auto &group : counter.group_fd) {
+void resetAndEnableCounters(const std::map<pid_t, struct pcounter> &counters) {
+  for (auto &counter : counters) {
+    // Second element is the pcounter associated with the PID.
+    for (const auto &group : counter.second.group_fd) {
       // reset the counters for ALL the events that are members of the group
       ioctl(group, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
       // enable all the events that are members of the group
@@ -189,66 +192,69 @@ void resetAndEnableCounters(const std::vector<struct pcounter> &counters) {
   }
 }
 
-void disableCounters(const std::vector<struct pcounter> &counters) {
-  for (const auto &counter : counters) {
-    for (const auto &group : counter.group_fd) {
+void disableCounters(const std::map<pid_t, struct pcounter> &counters) {
+  for (auto &counter : counters) {
+    // Second element is the pcounter associated with the PID.
+    for (const auto &group : counter.second.group_fd) {
       // disable all counters in the groups
       ioctl(group, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
     }
   }
 }
 
-void readCounters(std::vector<struct pcounter> &counters) {
+void readCounters(std::map<pid_t, struct pcounter> &counters) {
   for (auto &counter : counters) {
     // checks if this fd is "good." If  it's an unused file descriptor, then
     // Linux will deallocate memory for cin instead which leads to segmentation
     // faults (borrow checkers can't prevent  this because it happens in the
     // kernel)
-    if (counter.group_fd[CYCLES] > STDERR_FILENO) {
+    if (counter.second.group_fd[CYCLES] > STDERR_FILENO) {
       errno = 0;
       // The second event's counts are available via the group to which it and
       // the first event belong.   It's not obvious that a read to the second
       // event's group_fd will even succeeed.
-      ssize_t size = read(counter.group_fd[CYCLES], counter.event_data.buf,
-                          sizeof(counter.event_data.buf));
+      ssize_t size =
+          read(counter.second.group_fd[CYCLES], counter.second.event_data.buf,
+               sizeof(counter.second.event_data.buf));
       //  If false, reading could give us false counter values.
       if (size == COUNTER_READSIZE) {
-        for (int i = 0;
-             i < static_cast<int>(counter.event_data.per_event_values.nr);
+        for (int i = 0; i < static_cast<int>(
+                                counter.second.event_data.per_event_values.nr);
              i++) {
           //  Match the cycle count for an event with its instruction count.
-          if (counter.event_data.per_event_values.values[i].id ==
-              counter.event_id[CYCLES]) {
-            counter.event_value[CYCLES] =
-                counter.event_data.per_event_values.values[i].value;
-          } else if (counter.event_data.per_event_values.values[i].id ==
-                     counter.event_id[INSTRUCTIONS]) {
-            counter.event_value[INSTRUCTIONS] =
-                counter.event_data.per_event_values.values[i].value;
+          if (counter.second.event_data.per_event_values.values[i].id ==
+              counter.second.event_id[CYCLES]) {
+            counter.second.event_value[CYCLES] =
+                counter.second.event_data.per_event_values.values[i].value;
+          } else if (counter.second.event_data.per_event_values.values[i].id ==
+                     counter.second.event_id[INSTRUCTIONS]) {
+            counter.second.event_value[INSTRUCTIONS] =
+                counter.second.event_data.per_event_values.values[i].value;
           }
         }
       } else {
         if (errno) {
-          std::cerr << strerror(errno) << " " << counter.group_fd[CYCLES]
+          std::cerr << strerror(errno) << " " << counter.second.group_fd[CYCLES]
                     << std::endl;
         } else {
           std::cerr << "Insufficient data " << size << " bytes for group "
-                    << counter.group_fd[CYCLES] << std::endl;
+                    << counter.second.group_fd[CYCLES] << std::endl;
         }
       }
     } else {
-      std::cerr << "Bad file descriptor for task " << counter.pid << std::endl;
+      std::cerr << "Bad file descriptor for task " << counter.second.pid
+                << std::endl;
     }
   }
 }
 
 void getPidDelta(const std::string &proc_path, const pid_t pid,
-                 std::vector<struct pcounter> &MyCounters,
-                 std::vector<pid_t> &currentPids) {
-  std::vector<pid_t> diffPids{};
+                 std::map<pid_t, struct pcounter> &MyCounters,
+                 std::set<pid_t> &currentPids) {
+  std::set<pid_t> diffPids{};
 
   // calculate the PID delta
-  std::vector<pid_t> newPids = getProcessChildPids(proc_path, pid);
+  std::set<pid_t> newPids = getProcessChildPids(proc_path, pid);
   std::set_difference(
       newPids.begin(), newPids.end(), currentPids.begin(), currentPids.end(),
       std::inserter(diffPids,

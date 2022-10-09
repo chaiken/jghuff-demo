@@ -41,7 +41,8 @@ struct PcLibTest : public ::testing::Test {
       pc.group_fd[INSTRUCTIONS] =
           open(bfile_path.c_str(), O_RDWR | O_CREAT, 0744);
       EXPECT_EQ(pc.group_fd[INSTRUCTIONS], STDERR_FILENO + (2 * i) + 2);
-      counters.push_back(pc);
+      counters.insert(
+          std::pair<pid_t, struct pcounter>{static_cast<pid_t>(i), pc});
     }
   }
 
@@ -68,19 +69,19 @@ struct PcLibTest : public ::testing::Test {
 
   void writeFakeCounters() {
     uint32_t ctr = 0u;
-    for (struct pcounter &counter : counters) {
+    for (auto it = counters.begin(); it != counters.end(); it++) {
       unique_ptr<struct read_format> per_event_values(new struct read_format);
       per_event_values->nr = OBSERVED_EVENTS;
       per_event_values->values[CYCLES].id = ctr + 1;
-      counter.event_id[CYCLES] = per_event_values->values[CYCLES].id;
+      it->second.event_id[CYCLES] = per_event_values->values[CYCLES].id;
       per_event_values->values[CYCLES].value = ctr + 2;
       per_event_values->values[INSTRUCTIONS].id = ctr + 3;
       per_event_values->values[INSTRUCTIONS].value = ctr + 4;
-      counter.event_id[INSTRUCTIONS] =
+      it->second.event_id[INSTRUCTIONS] =
           per_event_values->values[INSTRUCTIONS].id;
-      ASSERT_EQ(
-          tryWriteCounterFds(counter.group_fd[CYCLES], move(per_event_values)),
-          sizeof(struct read_format));
+      ASSERT_EQ(tryWriteCounterFds(it->second.group_fd[CYCLES],
+                                   move(per_event_values)),
+                sizeof(struct read_format));
       ctr++;
     }
   }
@@ -92,14 +93,14 @@ struct PcLibTest : public ::testing::Test {
   }
   fs::path test_path;
   pid_t pid = INT_MIN;
-  std::vector<struct pcounter> counters{};
+  std::map<pid_t, struct pcounter> counters{};
 };
 
 TEST_F(PcLibTest, getProcessChildPids) {
   fs::current_path(fs::temp_directory_path());
   ASSERT_TRUE(fs::exists(test_path));
 
-  std::vector<pid_t> pids = getProcessChildPids(TEST_PATH, pid);
+  std::set<pid_t> pids = getProcessChildPids(TEST_PATH, pid);
   ASSERT_EQ(20u, pids.size());
   EXPECT_NE(pids.end(), std::find(pids.begin(), pids.end(), 0));
   EXPECT_NE(pids.end(), std::find(pids.begin(), pids.end(), 19));
@@ -111,9 +112,9 @@ TEST_F(PcLibTest, getProcessChildPids) {
 
 TEST_F(PcLibTest, cullCounter) {
   // Setup
-  std::vector<pid_t> to_cull;
+  std::set<pid_t> to_cull;
   for (int i = 0; i < NUMDIRS; i++) {
-    to_cull.push_back(static_cast<pid_t>(i * 2));
+    to_cull.emplace(static_cast<pid_t>(i * 2));
   }
   createFakeCounters();
   ASSERT_EQ(NUMDIRS, counters.size());
@@ -151,47 +152,51 @@ TEST_F(PcLibTest, readCounters) {
   ASSERT_EQ(NUMDIRS, counters.size());
   writeFakeCounters();
   int ctr = 0;
-  for (const struct pcounter &counter : counters) {
-    ASSERT_EQ(ctr + STDERR_FILENO + 1, counter.group_fd[0]);
-    ASSERT_EQ(ctr + STDERR_FILENO + 2, counter.group_fd[1]);
+  for (auto it = counters.begin(); it != counters.end(); it++) {
+    ASSERT_EQ(ctr + STDERR_FILENO + 1, it->second.group_fd[0]);
+    ASSERT_EQ(ctr + STDERR_FILENO + 2, it->second.group_fd[1]);
     errno = 0;
     std::unique_ptr<struct stat> cycles_buf(new struct stat);
-    EXPECT_EQ(0, fstat(counter.group_fd[CYCLES], cycles_buf.get()));
+    EXPECT_EQ(0, fstat(it->second.group_fd[CYCLES], cycles_buf.get()));
     EXPECT_EQ(sizeof(struct read_format), cycles_buf->st_size);
     std::unique_ptr<struct stat> instructions_buf(new struct stat);
-    EXPECT_EQ(0, fstat(counter.group_fd[INSTRUCTIONS], instructions_buf.get()));
-    EXPECT_EQ(0, fstat(counter.group_fd[CYCLES], instructions_buf.get()));
+    EXPECT_EQ(0,
+              fstat(it->second.group_fd[INSTRUCTIONS], instructions_buf.get()));
+    EXPECT_EQ(0, fstat(it->second.group_fd[CYCLES], instructions_buf.get()));
     EXPECT_EQ(sizeof(struct read_format), instructions_buf->st_size);
 
     // The write() syscall that populates the file data leaves the  file offset
-    // at the end, with the result that read() syscall in readCounters() reports
-    // that the file is empty.
-    ASSERT_EQ(0u, lseek(counter.group_fd[0], 0u, SEEK_SET));
-    ASSERT_EQ(0u, lseek(counter.group_fd[1], 0u, SEEK_SET));
+    // at the end, with the result that read() syscall in readIt->Seconds()
+    // reports that the file is empty.
+    ASSERT_EQ(0u, lseek(it->second.group_fd[0], 0u, SEEK_SET));
+    ASSERT_EQ(0u, lseek(it->second.group_fd[1], 0u, SEEK_SET));
 
     ctr += 2;
   }
   readCounters(counters);
 
   int idx = 0;
-  for (const struct pcounter &counter : counters) {
-    EXPECT_EQ(idx, counter.pid);
-    EXPECT_EQ(OBSERVED_EVENTS, counter.event_data.per_event_values.nr);
-    EXPECT_EQ(idx + 1, counter.event_data.per_event_values.values[CYCLES].id);
-    EXPECT_EQ(counter.event_id[CYCLES],
-              counter.event_data.per_event_values.values[CYCLES].id);
+  for (auto it = counters.begin(); it != counters.end(); it++) {
+    // First element of the map element is the key = PID.
+    EXPECT_EQ(idx, it->first);
+    EXPECT_EQ(OBSERVED_EVENTS, it->second.event_data.per_event_values.nr);
+    EXPECT_EQ(idx + 1,
+              it->second.event_data.per_event_values.values[CYCLES].id);
+    EXPECT_EQ(it->second.event_id[CYCLES],
+              it->second.event_data.per_event_values.values[CYCLES].id);
     EXPECT_EQ(idx + 2,
-              counter.event_data.per_event_values.values[CYCLES].value);
+              it->second.event_data.per_event_values.values[CYCLES].value);
     EXPECT_EQ(idx + 3,
-              counter.event_data.per_event_values.values[INSTRUCTIONS].id);
-    EXPECT_EQ(counter.event_id[INSTRUCTIONS],
-              counter.event_data.per_event_values.values[INSTRUCTIONS].id);
-    EXPECT_EQ(idx + 4,
-              counter.event_data.per_event_values.values[INSTRUCTIONS].value);
+              it->second.event_data.per_event_values.values[INSTRUCTIONS].id);
+    EXPECT_EQ(it->second.event_id[INSTRUCTIONS],
+              it->second.event_data.per_event_values.values[INSTRUCTIONS].id);
+    EXPECT_EQ(
+        idx + 4,
+        it->second.event_data.per_event_values.values[INSTRUCTIONS].value);
 
     errno = 0;
-    EXPECT_EQ(0, close(counter.group_fd[CYCLES]));
-    EXPECT_EQ(0, close(counter.group_fd[INSTRUCTIONS]));
+    EXPECT_EQ(0, close(it->second.group_fd[CYCLES]));
+    EXPECT_EQ(0, close(it->second.group_fd[INSTRUCTIONS]));
     idx++;
   }
 }

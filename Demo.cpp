@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
   setLimits();
 
   // our counter and PID data
-  std::vector<struct pcounter> MyCounters = {};
+  std::map<pid_t, struct pcounter> MyCounters = {};
   pid_t pid;
 
   // get a PID to track from the user
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 
   // the next step is to make counters for all the known children of our newly
   // obtained PID find all the children, then make counters for them
-  std::vector<pid_t> currentPids = getProcessChildPids(PROC_PATH, pid);
+  std::set<pid_t> currentPids = getProcessChildPids(PROC_PATH, pid);
   if (currentPids.empty()) {
     exit(EXIT_SUCCESS);
   }
@@ -97,9 +97,10 @@ int main(int argc, char **argv) {
     readCounters(MyCounters);
     long long cycles = 0;
     long long instructions = 0;
-    for (const auto &s : MyCounters) {
-      cycles += s.event_value[0];
-      instructions += s.event_value[1];
+    // Second element is the pcounter associated with the PID.
+    for (auto it = MyCounters.cbegin(); it != MyCounters.cend(); it++) {
+      cycles += it->second.event_value[0];
+      instructions += it->second.event_value[1];
     }
     printResults(cycles, instructions);
     getPidDelta(PROC_PATH, pid, MyCounters, currentPids);
