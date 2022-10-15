@@ -24,7 +24,7 @@ CLANG_TIDY_CLANG_OPTIONS=-std=c++17 -x c++  -I ~/gitsrc/googletest/googletest/in
 CLANG_TIDY_CHECKS=bugprone,core,cplusplus,cppcoreguidelines,deadcode,modernize,performance,readability,security,unix,apiModeling.StdCLibraryFunctions,apiModeling.google.GTest
 
 clean:
-	rm -rf *.o *~ Demo performance_counter_lib_test
+	rm -rf *.o *~ Demo performance_counter_lib_test performance_counter_lib_test_coverage *gcda *gcno *info *png *css *html
 
 performance_counter_lib: performance_counter_lib.cpp performance_counter_lib.hpp
 
