@@ -51,6 +51,10 @@ int main(int argc, char **argv) {
   setLimits();
 
   // our counter and PID data
+  // https://cplusplus.com/reference/map/map/
+  //  map containers are generally slower than unordered_map containers to
+  //  access individual elements by their key, but they allow the direct
+  //  iteration on subsets based on their order.
   std::map<pid_t, struct pcounter> MyCounters = {};
   pid_t pid;
 

@@ -175,6 +175,9 @@ void cullCounters(std::map<pid_t, struct pcounter> &counters,
         }
         // std::cout << "culling counter for pid " << counter.pid << std::endl;
         counters.erase(it);
+        // A given PID can occur only once in a std::map or std::set, so exit
+        // the loop.
+        break;
       }
     }
   }
