@@ -248,25 +248,35 @@ void readCounters(std::map<pid_t, struct pcounter> &counters) {
   }
 }
 
+// Why not simply create a new map container for the new task list and ignore
+// the exited tasks? Two reasons:
+// clang-format off
+// 0. The list of exited tasks is needed to close their file descriptors.
+// 1. Creating new counters involves a fair amount of overhead, so destroying
+//    and then recreating counters for ongoing tasks would be wasteful.
+// clang-format on
 void getPidDelta(const std::string &proc_path, const pid_t pid,
                  std::map<pid_t, struct pcounter> &MyCounters,
                  std::set<pid_t> &currentPids) {
   std::set<pid_t> diffPids{};
 
-  // calculate the PID delta
+  // Reread the child tasks of the provided parent PID from procfs.
   std::set<pid_t> newPids = getProcessChildPids(proc_path, pid);
-  std::set_difference(
-      newPids.begin(), newPids.end(), currentPids.begin(), currentPids.end(),
-      std::inserter(diffPids,
-                    diffPids.begin())); // calculate what's in newPids that
-                                        // isn't in oldPids
+
+  // Find PIDs of newly running tasks.
+  std::set_difference(newPids.begin(), newPids.end(), currentPids.begin(),
+                      currentPids.end(),
+                      std::inserter(diffPids, diffPids.begin()));
+  // Create new counters for tasks which started since last iteration.
   createCounters(MyCounters, diffPids);
   diffPids.clear();
-  std::set_difference(
-      currentPids.begin(), currentPids.end(), newPids.begin(), newPids.end(),
-      std::inserter(diffPids,
-                    diffPids.begin())); // calculate what's in oldPids that
-                                        // isn't in newPids
+
+  // Find PIDs of tasks which exited since last iteration.
+  std::set_difference(currentPids.begin(), currentPids.end(), newPids.begin(),
+                      newPids.end(), std::inserter(diffPids, diffPids.begin()));
+
+  // Close file descriptors associated with tasks that have exited and remove
+  // their counters from the map.
   cullCounters(MyCounters, diffPids);
   currentPids = std::move(newPids);
 }
