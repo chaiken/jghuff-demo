@@ -16,6 +16,24 @@ std::pair<bool, uint64_t> safe_strtoul(const std::string &str) {
   retval.first = true;
   return retval;
 }
+
+void close_counter_fds(const std::array<int, 2u> &fds) {
+  for (const int fd : fds) {
+    if (fd > STDERR_FILENO) {
+      // std::cout << "closing fd " << filedescriptor << std::endl;
+      // events, and performance counters as a  whole, are nothing but
+      // file descriptors,  so we can simply close them to get rid of
+      // counters
+      errno = 0;
+      int res = close(fd);
+      if (res) {
+        std::cerr << "Error closing fd " << fd << " " << strerror(errno)
+                  << std::endl;
+      }
+    }
+  }
+}
+
 } // namespace
 
 std::string lookupErrorMessage(const int errnum) {
@@ -159,20 +177,7 @@ void cullCounters(std::map<pid_t, struct pcounter> &counters,
       // First element is the key, which is the PID.
       if (it->first == culledpid) {
         // Second element is the pcounter associated with the PID.
-        for (const auto filedescriptor : it->second.group_fd) {
-          if (filedescriptor > STDERR_FILENO) {
-            // std::cout << "closing fd " << filedescriptor << std::endl;
-            // events, and performance counters as a  whole, are nothing but
-            // file descriptors,  so we can simply close them to get rid of
-            // counters
-            errno = 0;
-            int res = close(filedescriptor);
-            if (res) {
-              std::cerr << "Error closing fd " << filedescriptor << " "
-                        << strerror(errno) << std::endl;
-            }
-          }
-        }
+        close_counter_fds(it->second.group_fd);
         // std::cout << "culling counter for pid " << counter.pid << std::endl;
         counters.erase(it);
         // A given PID can occur only once in a std::map or std::set, so exit
