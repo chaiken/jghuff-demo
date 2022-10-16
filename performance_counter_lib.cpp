@@ -70,10 +70,6 @@ std::string lookupErrorMessage(const int errnum) {
   }
 }
 
-bool operator==(const struct pcounter &a, const struct pcounter &b) {
-  return (a.pid == b.pid);
-}
-
 std::set<pid_t> getProcessChildPids(const std::string &proc_path,
                                     const pid_t pid) {
   std::set<pid_t> pids{};
