@@ -77,6 +77,8 @@ struct pcounter { // our Modern C++ abstraction for a generic performance
 
 std::set<pid_t> getProcessChildPids(const std::string &proc_path, pid_t pid);
 
+void setupCounter(struct pcounter &s);
+
 void createCounters(std::map<pid_t, struct pcounter> &counters,
                     const std::set<pid_t> &pids);
 

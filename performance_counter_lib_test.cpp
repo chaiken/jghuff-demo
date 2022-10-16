@@ -99,6 +99,19 @@ struct PcLibTest : public ::testing::Test {
   std::map<pid_t, struct pcounter> counters{};
 };
 
+TEST(PcLibSimpleTest, setupCounter) {
+  struct pcounter acounter(FAKE_PID);
+  setupCounter(acounter);
+  for (const auto &ps : acounter.perfstruct) {
+    EXPECT_EQ(PERF_TYPE_HARDWARE, ps.type);
+    EXPECT_EQ(sizeof(struct perf_event_attr), ps.size);
+    EXPECT_EQ(true, ps.disabled);
+    EXPECT_EQ(PERF_FORMAT_GROUP | PERF_FORMAT_ID, ps.read_format);
+  }
+  EXPECT_EQ(PERF_COUNT_HW_CPU_CYCLES, acounter.perfstruct[0].config);
+  EXPECT_EQ(PERF_COUNT_HW_INSTRUCTIONS, acounter.perfstruct[1].config);
+}
+
 TEST_F(PcLibTest, getProcessChildPids) {
   fs::current_path(fs::temp_directory_path());
   ASSERT_TRUE(fs::exists(test_path));
