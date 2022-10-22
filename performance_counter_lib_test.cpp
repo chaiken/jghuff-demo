@@ -1,9 +1,11 @@
 #include "performance_counter_lib.hpp"
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include <fcntl.h>
 #include <limits.h>
+#include <sstream>
 #include <sys/stat.h>
 
 using namespace std;
@@ -250,6 +252,31 @@ TEST_F(PcLibTest, getPidDelta) {
   ASSERT_EQ(pids.size() / 2u, new_pids.size());
   getPidDelta(TEST_PATH, FAKE_PID, counters, pids);
   ASSERT_EQ(NUMDIRS / 2u, counters.size());
+}
+
+TEST_F(PcLibTest, BadFileDescriptors) {
+  // Capture stderr into a stringstream
+  std::unique_ptr<std::ostringstream> cerrStringstream(new std::ostringstream);
+  // Save a copy of the buffer for the current cerr.
+  std::streambuf *oldStdErrBuf(cerr.rdbuf());
+  cerr.rdbuf(cerrStringstream->rdbuf());
+
+  readCounters(counters);
+  EXPECT_EQ(0u, counters.size());
+
+  for (int i = 0; i < NUMDIRS; i++) {
+    struct pcounter pc(static_cast<pid_t>(i));
+    pc.group_fd[CYCLES] = STDIN_FILENO;
+    pc.group_fd[INSTRUCTIONS] = STDOUT_FILENO;
+    counters.insert(
+        std::pair<pid_t, struct pcounter>{static_cast<pid_t>(i), pc});
+  }
+  readCounters(counters);
+  EXPECT_THAT(cerrStringstream->str(),
+              testing::HasSubstr(std::string("Bad file descriptor for task")));
+
+  // Restore old stderr.
+  cerr.rdbuf(oldStdErrBuf);
 }
 
 } // namespace local_testing
