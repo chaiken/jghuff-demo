@@ -254,12 +254,29 @@ TEST_F(PcLibTest, getPidDelta) {
   ASSERT_EQ(NUMDIRS / 2u, counters.size());
 }
 
-TEST_F(PcLibTest, BadFileDescriptors) {
-  // Capture stderr into a stringstream
-  std::unique_ptr<std::ostringstream> cerrStringstream(new std::ostringstream);
-  // Save a copy of the buffer for the current cerr.
-  std::streambuf *oldStdErrBuf(cerr.rdbuf());
-  cerr.rdbuf(cerrStringstream->rdbuf());
+// Capture stderr into a stringstream.
+// Save a copy of the buffer for the current cerr.
+struct PcLibErrorTest : public PcLibTest {
+  PcLibErrorTest()
+      : PcLibTest(), cerrStringstream(new std::ostringstream),
+        oldStdErrBuf(cerr.rdbuf()) {}
+
+  void SetUp() override {
+    PcLibTest::SetUp();
+    cerr.rdbuf(cerrStringstream->rdbuf());
+  }
+
+  void TearDown() override {
+    PcLibTest::TearDown();
+    // Restore old stderr.
+    cerr.rdbuf(oldStdErrBuf);
+  }
+
+  std::unique_ptr<std::ostringstream> cerrStringstream;
+  std::streambuf *oldStdErrBuf;
+};
+
+TEST_F(PcLibErrorTest, BadFileDescriptors) {
 
   readCounters(counters);
   EXPECT_EQ(0u, counters.size());
@@ -274,9 +291,6 @@ TEST_F(PcLibTest, BadFileDescriptors) {
   readCounters(counters);
   EXPECT_THAT(cerrStringstream->str(),
               testing::HasSubstr(std::string("Bad file descriptor for task")));
-
-  // Restore old stderr.
-  cerr.rdbuf(oldStdErrBuf);
 }
 
 } // namespace local_testing
