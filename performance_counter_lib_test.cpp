@@ -289,8 +289,11 @@ TEST_F(PcLibErrorTest, BadFileDescriptors) {
         std::pair<pid_t, struct pcounter>{static_cast<pid_t>(i), pc});
   }
   readCounters(counters);
-  EXPECT_THAT(cerrStringstream->str(),
-              testing::HasSubstr(std::string("Bad file descriptor for task")));
+  for (int i = 0; i < NUMDIRS; i++) {
+    EXPECT_THAT(cerrStringstream->str(),
+                testing::HasSubstr(std::string("Bad file descriptor for task " +
+                                               std::to_string(i))));
+  }
 }
 
 } // namespace local_testing
