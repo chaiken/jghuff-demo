@@ -14,7 +14,7 @@ GTEST_LIBS= $(GTEST_LIB_PATH)/libgtest.a $(GTEST_LIB_PATH)/libgtest_main.a $(GTE
 
 CXX=/usr/bin/g++
 CXXFLAGS = -std=c++17 -ggdb -Wall -Wextra -Werror -g -O0 -fno-inline -fsanitize=address,undefined -isystem $(GTEST_HEADERS) -isystem $(GMOCK_HEADERS)
-CXXFLAGS-NOSANITIZE = -std=c++17 -ggdb -Wall -Wextra -Werror -g -O0 -fno-inline -isystem $(GTEST_HEADERS)
+CXXFLAGS-NOSANITIZE = -std=c++17 -ggdb -Wall -Wextra -Werror -g -O0 -fno-inline -isystem $(GTEST_HEADERS) -isystem $(GMOCK_HEADERS)
 LDFLAGS= -ggdb -g -fsanitize=address -L$(GTEST_LIB_PATH)
 LDFLAGS-NOSANITIZE= -ggdb -g -L$(GTEST_LIB_PATH)
 LDFLAGS-NOTEST= -ggdb -g -fsanitize=address
@@ -48,7 +48,7 @@ COVERAGE_EXTRA_FLAGS = --coverage
 
 performance_counter_lib_test_coverage: CXXFLAGS = $(CXXFLAGS-NOSANITIZE) $(COVERAGE_EXTRA_FLAGS)
 performance_counter_lib_test_coverage: LDFLAGS = $(LDFLAGS-NOSANITIZE)
-performance_counter_lib_test_coverage:  performance_counter_lib_test.cpp performance_counter_lib.cpp $(GTESTHEADERS)
+performance_counter_lib_test_coverage:  performance_counter_lib_test.cpp performance_counter_lib.cpp
 	make clean
 	$(CXX) $(CXXFLAGS)  $(LDFLAGS) $^ $(GTEST_LIBS) -o $@
 	run_lcov.sh
